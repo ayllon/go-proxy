@@ -202,6 +202,9 @@ func TestNewProxy(t *testing.T) {
 		nested.Certificate.PublicKey.(*rsa.PublicKey).E != r.Key.E {
 		t.Fatal("New proxy public key does not match the private key used to sign the request")
 	}
+	if !r.Matches(nested)  {
+		t.Fatal("Matches method must return true here")
+	}
 
 	if bytes.Compare(nested.Certificate.RawIssuer, p.Certificate.RawSubject) != 0 {
 		t.Fatal("The issuer of the new proxy is not the original proxy")

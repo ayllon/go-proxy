@@ -18,8 +18,6 @@ package proxy
 
 import (
 	"crypto/x509"
-	"crypto/sha1"
-	"fmt"
 )
 
 // getProxyType returns the proxy type of cert
@@ -62,16 +60,4 @@ func getIdentity(proxy *X509Proxy) (string, error) {
 		return "", ErrMalformedProxy
 	}
 	return NameRepr(cert.Subject), nil
-}
-
-// calculateDelegationId returns the delegation id corresponding to the proxy.
-func calculateDelegationId(proxy *X509Proxy) string {
-	hash := sha1.New()
-	hash.Write([]byte(proxy.Subject))
-	for _, vo := range proxy.VomsAttributes {
-		hash.Write([]byte(vo.Fqan))
-	}
-	data := make([]byte, 0, 20)
-	data = hash.Sum(data)
-	return fmt.Sprintf("%x", data[:8])
 }

@@ -18,10 +18,12 @@ package proxy
 
 import (
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
@@ -38,8 +40,8 @@ var (
 	ProxyPolicyInheritAll  = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 1}
 	ProxyPolicyIndependent = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 2}
 
-	ErrMalformedProxy   = errors.New("Malformed proxy")
-	ErrModulusMismatch  = errors.New("Modulus mismatch")
+	ErrMalformedProxy  = errors.New("Malformed proxy")
+	ErrModulusMismatch = errors.New("Modulus mismatch")
 )
 
 const (
@@ -71,7 +73,6 @@ type (
 		Subject        string
 		Issuer         string
 		Identity       string
-		DelegationId   string
 		VomsAttributes []VomsAttribute
 	}
 )
@@ -104,6 +105,18 @@ func (p *X509Proxy) Expired() bool {
 	}
 
 	return false
+}
+
+// DelegationId returns the delegation id corresponding to the proxy.
+func (p *X509Proxy) DelegationId() string {
+	hash := sha1.New()
+	hash.Write([]byte(p.Subject))
+	for _, vo := range p.VomsAttributes {
+		hash.Write([]byte(vo.Fqan))
+	}
+	data := make([]byte, 0, 20)
+	data = hash.Sum(data)
+	return fmt.Sprintf("%x", data[:8])
 }
 
 // Decode loads a X509 proxy from a string in memory.
@@ -149,7 +162,6 @@ func (p *X509Proxy) Decode(raw []byte) (err error) {
 	}
 
 	p.ProxyType = getProxyType(p.Certificate)
-	p.DelegationId = calculateDelegationId(p)
 	p.Subject = NameRepr(p.Certificate.Subject)
 	p.Issuer = NameRepr(p.Certificate.Issuer)
 	p.Identity, err = getIdentity(p)

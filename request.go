@@ -102,6 +102,6 @@ func (r *X509ProxyRequest) Decode(req []byte, key []byte) (err error) {
 }
 
 // SignedOn returns true if p is the request signed.
-func (r *X509ProxyRequest) SignedOn(p *X509Proxy) bool {
+func (r *X509ProxyRequest) Matches(p *X509Proxy) bool {
 	return r.Key.N.Cmp(p.Certificate.PublicKey.(*rsa.PublicKey).N) == 0
 }

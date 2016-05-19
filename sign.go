@@ -114,7 +114,6 @@ func (p *X509Proxy) SignRequest(req *X509ProxyRequest, lifetime time.Duration) (
 		Subject:        NameRepr(cert.Subject),
 		Issuer:         p.Subject,
 		Identity:       p.Identity,
-		DelegationId:   p.DelegationId,
 		VomsAttributes: make([]VomsAttribute, len(p.VomsAttributes)),
 	}
 	new.Chain = append(new.Chain, p.Certificate)

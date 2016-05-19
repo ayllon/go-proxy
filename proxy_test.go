@@ -313,7 +313,7 @@ func commonAsserts(proxy *X509Proxy, t *testing.T) {
 	if len(proxy.Chain) != 1 {
 		t.Fatal("Expecting one certificate in the chain")
 	}
-	if proxy.DelegationId == "" {
+	if proxy.DelegationId() == "" {
 		t.Fatal("Delegation id empty")
 	}
 }
