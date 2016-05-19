@@ -29,30 +29,24 @@ import (
 	"time"
 )
 
-type ProxyType int
+// Type is the detected type of the proxy. It can be No Proxy, Legacy, Draft or RFC.
+type Type int
 
-var (
-	VomsExtOid             = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 8005, 100, 100, 5}
-	VomsAttrOid            = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 8005, 100, 100, 4}
-	ProxyCertInfo          = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 14}
-	ProxyCertInfoLegacy    = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 3536, 1, 222}
-	ProxyPolicyAnyLanguage = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 0}
-	ProxyPolicyInheritAll  = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 1}
-	ProxyPolicyIndependent = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 2}
-
-	ErrMalformedProxy  = errors.New("Malformed proxy")
-	ErrModulusMismatch = errors.New("Modulus mismatch")
+// Proxy types.
+const (
+	TypeNoProxy = Type(0)
+	TypeLegacy  = Type(1)
+	TypeDraft   = Type(2)
+	TypeRFC3820 = Type(3)
 )
 
-const (
-	ProxyTypeNoProxy = ProxyType(0)
-	ProxyTypeLegacy  = ProxyType(1)
-	ProxyTypeDraft   = ProxyType(2)
-	ProxyTypeRFC3820 = ProxyType(3)
+var (
+	// ErrMalformedProxy is returned when the proxy can not be parsed.
+	ErrMalformedProxy = errors.New("Malformed proxy")
 )
 
 type (
-	// VoExtension holds basic information about the Vo extensions of a proxy.
+	// VomsAttribute holds basic information about the Vo extensions of a proxy.
 	VomsAttribute struct {
 		Subject             string
 		Issuer              string
@@ -62,14 +56,14 @@ type (
 		PolicyAuthority     string
 	}
 
-	// Proxy holds an X509 proxy.
+	// X509Proxy holds an X509 proxy.
 	X509Proxy struct {
 		// Actual data
 		Certificate *x509.Certificate
 		Key         *rsa.PrivateKey
 		Chain       []*x509.Certificate
 		// Convenience fields
-		ProxyType      ProxyType
+		ProxyType      Type
 		Subject        string
 		Issuer         string
 		Identity       string
@@ -107,8 +101,8 @@ func (p *X509Proxy) Expired() bool {
 	return false
 }
 
-// DelegationId returns the delegation id corresponding to the proxy.
-func (p *X509Proxy) DelegationId() string {
+// DelegationID returns the delegation id corresponding to the proxy.
+func (p *X509Proxy) DelegationID() string {
 	hash := sha1.New()
 	hash.Write([]byte(p.Subject))
 	for _, vo := range p.VomsAttributes {
@@ -188,7 +182,7 @@ func (p *X509Proxy) DecodeFromFile(path string) (err error) {
 
 // Encode returns the PEM version of the proxy.
 func (p *X509Proxy) Encode() []byte {
-	full := make([]byte, 0)
+	var full []byte
 
 	pemCert := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",

@@ -313,7 +313,7 @@ func commonAsserts(proxy *X509Proxy, t *testing.T) {
 	if len(proxy.Chain) != 1 {
 		t.Fatal("Expecting one certificate in the chain")
 	}
-	if proxy.DelegationId() == "" {
+	if proxy.DelegationID() == "" {
 		t.Fatal("Delegation id empty")
 	}
 }
@@ -329,7 +329,7 @@ func TestLegacyProxy(t *testing.T) {
 	}
 
 	commonAsserts(&p, t)
-	if p.ProxyType != ProxyTypeLegacy {
+	if p.ProxyType != TypeLegacy {
 		t.Fatal("Expecting Legacy proxy")
 	}
 }
@@ -345,7 +345,7 @@ func TestDraftProxy(t *testing.T) {
 	}
 
 	commonAsserts(&p, t)
-	if p.ProxyType != ProxyTypeDraft {
+	if p.ProxyType != TypeDraft {
 		t.Fatal("Expecting Draft proxy")
 	}
 }
@@ -361,7 +361,7 @@ func TestRfcProxy(t *testing.T) {
 	}
 
 	commonAsserts(&p, t)
-	if p.ProxyType != ProxyTypeRFC3820 {
+	if p.ProxyType != TypeRFC3820 {
 		t.Fatal("Expecting RFC proxy")
 	}
 }

@@ -38,7 +38,7 @@ type (
 )
 
 var (
-	CommonNameOid = asn1.ObjectIdentifier{2, 5, 4, 3}
+	commonNameOid = asn1.ObjectIdentifier{2, 5, 4, 3}
 )
 
 // generateProxySubject returns the new proxy subject depending on the type of the signing proxy
@@ -46,13 +46,15 @@ func generateProxySubject(p *X509Proxy, out *pkix.Name) {
 	out.Names = append(out.Names, p.Certificate.Subject.Names...)
 	out.ExtraNames = append(out.ExtraNames, p.Certificate.Subject.Names...)
 
-	if p.ProxyType == ProxyTypeRFC3820 {
+	if p.ProxyType == TypeRFC3820 {
 		out.ExtraNames = append(out.ExtraNames, pkix.AttributeTypeAndValue{
-			CommonNameOid, fmt.Sprint(time.Now().Unix()),
+			Type:  commonNameOid,
+			Value: fmt.Sprint(time.Now().Unix()),
 		})
 	} else {
 		out.ExtraNames = append(out.ExtraNames, pkix.AttributeTypeAndValue{
-			CommonNameOid, "proxy",
+			Type:  commonNameOid,
+			Value: "proxy",
 		})
 	}
 }
@@ -79,18 +81,18 @@ func (p *X509Proxy) SignRequest(req *X509ProxyRequest, lifetime time.Duration) (
 	}
 
 	switch p.ProxyType {
-	case ProxyTypeRFC3820:
+	case TypeRFC3820:
 		var data []byte
 		data, err = asn1.Marshal(proxyCertInfoExtension{
 			ProxyPolicy: proxyPolicy{
-				PolicyLanguage: ProxyPolicyInheritAll,
+				PolicyLanguage: proxyPolicyInheritAllOid,
 			},
 		})
 		if err != nil {
 			return
 		}
 		template.ExtraExtensions = append(template.ExtraExtensions, pkix.Extension{
-			Id:       ProxyCertInfo,
+			Id:       proxyCertInfoOid,
 			Critical: true,
 			Value:    data,
 		})

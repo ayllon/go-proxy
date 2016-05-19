@@ -28,6 +28,16 @@ import (
 	"time"
 )
 
+var (
+	vomsExtOid                = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 8005, 100, 100, 5}
+	vomsAttrOid               = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 8005, 100, 100, 4}
+	proxyCertInfoOid          = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 14}
+	proxyCertInfoLegacyOid    = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 3536, 1, 222}
+	proxyPolicyAnyLanguageOid = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 0}
+	proxyPolicyInheritAllOid  = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 1}
+	proxyPolicyIndependentOid = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 2}
+)
+
 type (
 	// This is the structure of the extension
 	// Defined in RFC 5755
@@ -49,7 +59,7 @@ type (
 		SerialNumber   *big.Int
 		Validity       validityPeriod
 		Attributes     []attribute
-		IssuerUniqueId asn1.BitString   `asn1:"optional"`
+		IssuerUniqueID asn1.BitString   `asn1:"optional"`
 		Extensions     []pkix.Extension `asn1:"optional"`
 	}
 
@@ -61,7 +71,7 @@ type (
 
 	v2Form struct {
 		IssuerName        asn1.RawValue    `asn1:"optional"`
-		BaseCertificateId issuerSerial     `asn1:"optional,tag:0"`
+		BaseCertificateID issuerSerial     `asn1:"optional,tag:0"`
 		ObjectDigestInfo  objectDigestInfo `asn1:"optional,tag:1"`
 	}
 
@@ -185,7 +195,7 @@ func parseAttCertIssuer(v asn1.RawValue) (string, error) {
 
 // parseVomsAttribute parsed the voms extension
 func parseVomsAttribute(cert *x509.Certificate, ac *attributeCertificate) (vomsAttr *VomsAttribute, err error) {
-	if rawAttr := ac.AcInfo.getAttribute(VomsAttrOid); rawAttr != nil {
+	if rawAttr := ac.AcInfo.getAttribute(vomsAttrOid); rawAttr != nil {
 		if !rawAttr.Value.IsCompound {
 			return nil, ErrMalformedProxy
 		}
@@ -268,7 +278,7 @@ func (proxy *X509Proxy) parseVomsExtensions(raw []byte) (vomsAttrs []VomsAttribu
 // parseExtensions processes the proxy extensions
 func (proxy *X509Proxy) parseExtensions(cert *x509.Certificate) (err error) {
 	for _, extension := range cert.Extensions {
-		if extension.Id.Equal(VomsExtOid) {
+		if extension.Id.Equal(vomsExtOid) {
 			var newAttrs []VomsAttribute
 			newAttrs, err = proxy.parseVomsExtensions(extension.Value)
 			if err != nil {

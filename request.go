@@ -27,13 +27,14 @@ import (
 )
 
 type (
+	// X509ProxyRequest contains both certificate request and the associated private key.
 	X509ProxyRequest struct {
 		Request *x509.CertificateRequest
 		Key     *rsa.PrivateKey
 	}
 )
 
-// Generates a new Proxy Request.
+// Init initializes the certificate request and private key, using a key of 'bits', and signed with the given algorithm.
 func (r *X509ProxyRequest) Init(bits int, signature x509.SignatureAlgorithm) (err error) {
 	if r.Key, err = rsa.GenerateKey(rand.Reader, bits); err != nil {
 		return
@@ -101,7 +102,7 @@ func (r *X509ProxyRequest) Decode(req []byte, key []byte) (err error) {
 	return nil
 }
 
-// SignedOn returns true if p is the request signed.
+// Matches returns true if p is the request signed.
 func (r *X509ProxyRequest) Matches(p *X509Proxy) bool {
 	return r.Key.N.Cmp(p.Certificate.PublicKey.(*rsa.PublicKey).N) == 0
 }

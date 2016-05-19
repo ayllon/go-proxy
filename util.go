@@ -21,28 +21,28 @@ import (
 )
 
 // getProxyType returns the proxy type of cert
-func getProxyType(cert *x509.Certificate) ProxyType {
+func getProxyType(cert *x509.Certificate) Type {
 	for _, ext := range cert.Extensions {
-		if ext.Id.Equal(ProxyCertInfo) {
-			return ProxyTypeRFC3820
-		} else if ext.Id.Equal(ProxyCertInfoLegacy) {
-			return ProxyTypeDraft
+		if ext.Id.Equal(proxyCertInfoOid) {
+			return TypeRFC3820
+		} else if ext.Id.Equal(proxyCertInfoLegacyOid) {
+			return TypeDraft
 		}
 	}
 	if cert.Subject.CommonName == "proxy" {
-		return ProxyTypeLegacy
+		return TypeLegacy
 	}
-	return ProxyTypeNoProxy
+	return TypeNoProxy
 }
 
 // isProxy checks if cert is a proxy certificate.
 func isProxy(cert *x509.Certificate) bool {
-	return getProxyType(cert) != ProxyTypeNoProxy
+	return getProxyType(cert) != TypeNoProxy
 }
 
 // getEndUserCertificate returns the end user original certificate.
 func getEndUserCertificate(proxy *X509Proxy) *x509.Certificate {
-	if proxy.ProxyType == ProxyTypeNoProxy {
+	if proxy.ProxyType == TypeNoProxy {
 		return proxy.Certificate
 	}
 	for _, cert := range proxy.Chain {

@@ -57,12 +57,12 @@ func main() {
 	}
 
 	var r proxy.X509ProxyRequest
-	log.Print("Generating request %d", *strength)
+	log.Printf("Generating request %d", *strength)
 	if e := r.Init(*strength, x509.SHA256WithRSA); e != nil {
 		log.Fatal(e)
 	}
 
-	log.Print("Signing new proxy with a lifetime of %s", *lifetime)
+	log.Printf("Signing new proxy with a lifetime of %s", lifetime.String())
 	new, e := p.SignRequest(&r, *lifetime)
 	if e != nil {
 		log.Fatal(e)
