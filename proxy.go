@@ -20,7 +20,6 @@ import (
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/x509"
-	"encoding/asn1"
 	"encoding/pem"
 	"errors"
 	"fmt"
