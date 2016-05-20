@@ -15,7 +15,7 @@ go-proxy is an utility library written in Go to handle X509 proxies, with and wi
  [![GoDoc](https://godoc.org/gitlab.cern.ch/fts/go-proxy?status.svg)](https://godoc.org/gitlab.cern.ch/fts/go-proxy)
  
  
- ## Examples
+## Examples
 
 ### Load a proxy, print its VOMS
 ```go
