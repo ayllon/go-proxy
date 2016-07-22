@@ -91,13 +91,15 @@ func (r *X509ProxyRequest) Decode(req []byte, key []byte) (err error) {
 		return
 	}
 
-	if keyBlock, _ = pem.Decode(key); keyBlock == nil {
-		return errors.New("Private key is not a valid PEM block")
-	} else if keyBlock.Type != "RSA PRIVATE KEY" {
-		return fmt.Errorf("Expecting RSA PRIVATE KEY, got %s", reqBlock.Type)
-	}
-	if r.Key, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes); err != nil {
-		return
+	if key != nil && len(key) > 0 {
+		if keyBlock, _ = pem.Decode(key); keyBlock == nil {
+			return errors.New("Private key is not a valid PEM block")
+		} else if keyBlock.Type != "RSA PRIVATE KEY" {
+			return fmt.Errorf("Expecting RSA PRIVATE KEY, got %s", reqBlock.Type)
+		}
+		if r.Key, err = x509.ParsePKCS1PrivateKey(keyBlock.Bytes); err != nil {
+			return
+		}
 	}
 	return nil
 }
