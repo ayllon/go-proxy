@@ -20,7 +20,7 @@ import (
 	"crypto/rsa"
 	"flag"
 	"fmt"
-	"gitlab.cern.ch/fts/go-proxy"
+	"gitlab.cern.ch/flutter/go-proxy"
 	"log"
 	"os"
 	"time"
