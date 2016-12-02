@@ -197,7 +197,7 @@ func parseAttCertIssuer(v asn1.RawValue) (string, error) {
 func parseVomsAttribute(cert *x509.Certificate, ac *attributeCertificate) (vomsAttr *VomsAttribute, err error) {
 	if rawAttr := ac.AcInfo.getAttribute(vomsAttrOid); rawAttr != nil {
 		if !rawAttr.Value.IsCompound {
-			return nil, ErrMalformedProxy
+			return nil, errors.New("Expecting a compound attribute")
 		}
 		var attr ietfAttrSyntax
 		if _, err = asn1.Unmarshal(rawAttr.Value.Bytes, &attr); err != nil {

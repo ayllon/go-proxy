@@ -18,6 +18,7 @@ package proxy
 
 import (
 	"crypto/x509"
+	"errors"
 )
 
 // getProxyType returns the proxy type of cert
@@ -57,7 +58,7 @@ func getEndUserCertificate(proxy *X509Proxy) *x509.Certificate {
 func getIdentity(proxy *X509Proxy) (string, error) {
 	cert := getEndUserCertificate(proxy)
 	if cert == nil {
-		return "", ErrMalformedProxy
+		return "", errors.New("Could not get the end user certificate")
 	}
 	return NameRepr(cert.Subject), nil
 }

@@ -21,7 +21,6 @@ import (
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -37,11 +36,6 @@ const (
 	TypeLegacy  = Type(1)
 	TypeDraft   = Type(2)
 	TypeRFC3820 = Type(3)
-)
-
-var (
-	// ErrMalformedProxy is returned when the proxy can not be parsed.
-	ErrMalformedProxy = errors.New("Malformed proxy")
 )
 
 type (
@@ -116,7 +110,7 @@ func (p *X509Proxy) DelegationID() string {
 // Returns a pointer to a X509Proxy holding basic information about the proxy, as valid timestamps,
 // VO extensions, etc.
 func (p *X509Proxy) Decode(raw []byte) (err error) {
-	p.Chain = make([]*x509.Certificate, 0, 10)
+	chain := make([]*x509.Certificate, 0, 10)
 
 	for block, remaining := pem.Decode(raw); block != nil; block, remaining = pem.Decode(remaining) {
 		switch block.Type {
@@ -126,13 +120,11 @@ func (p *X509Proxy) Decode(raw []byte) (err error) {
 			var cert *x509.Certificate
 			if cert, err = x509.ParseCertificate(block.Bytes); err != nil {
 				break
-			} else if p.Certificate == nil {
-				p.Certificate = cert
 			} else {
-				p.Chain = append(p.Chain, cert)
+				chain = append(chain, cert)
 			}
 		default:
-			err = ErrMalformedProxy
+			err = fmt.Errorf("Unknown block type: %s", block.Type)
 		}
 
 		if err != nil {
@@ -140,10 +132,17 @@ func (p *X509Proxy) Decode(raw []byte) (err error) {
 		}
 	}
 
-	if p.Certificate == nil {
-		err = ErrMalformedProxy
+	if len(chain) == 0 {
+		err = fmt.Errorf("Missing certificate")
 		return
 	}
+
+	return p.InitFromCertificates(chain)
+}
+
+// InitFromCertificate initializes the proxy from a x509 certificate
+func (p *X509Proxy) InitFromCertificates(chain []*x509.Certificate) (err error) {
+	p.Certificate, p.Chain = chain[0], chain[1:]
 
 	if err = p.parseExtensions(p.Certificate); err != nil {
 		return
@@ -153,14 +152,11 @@ func (p *X509Proxy) Decode(raw []byte) (err error) {
 			return
 		}
 	}
-
 	p.ProxyType = getProxyType(p.Certificate)
 	p.Subject = NameRepr(p.Certificate.Subject)
 	p.Issuer = NameRepr(p.Certificate.Issuer)
 	p.Identity, err = getIdentity(p)
-
 	return
-
 }
 
 // DecodeFromFile loads a X509 proxy from a file.

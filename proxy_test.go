@@ -283,8 +283,8 @@ lR/i0zjHVmx+zcLAA4Q9+NOLVH/Ba7527a5OM64mpPk/nSBw9khW
 
 func TestParseMalformed(t *testing.T) {
 	var p X509Proxy
-	if e := p.Decode([]byte("RANDOM GARBAGE")); e != ErrMalformedProxy {
-		t.Fatal("Expected ", ErrMalformedProxy, " got ", e)
+	if e := p.Decode([]byte("RANDOM GARBAGE")); e == nil {
+		t.Fatal("Expected an error")
 	}
 }
 
