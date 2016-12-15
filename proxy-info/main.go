@@ -38,6 +38,8 @@ func getProxyPath() string {
 }
 
 func main() {
+	capath := flag.String("capath", "/etc/grid-security/certificates", "Directory with the root CAs")
+
 	flag.Parse()
 
 	if *proxyPath == "" {
@@ -66,5 +68,13 @@ func main() {
 		fmt.Printf("attribute : %s\n", v.Fqan)
 		fmt.Printf("timeleft  : %s\n", v.NotAfter.Sub(time.Now()))
 		fmt.Printf("uri       : %s\n", v.PolicyAuthority)
+	}
+
+	if roots, err := proxy.LoadCAPath(*capath); err != nil {
+		fmt.Printf("Failed to load the root CA: %s", err)
+	} else if err = p.Verify(roots); err != nil {
+		fmt.Printf("Verification result: %s\n", err)
+	} else {
+		fmt.Printf("Verification OK\n")
 	}
 }
