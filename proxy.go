@@ -20,6 +20,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
@@ -156,7 +157,31 @@ func (p *X509Proxy) InitFromCertificates(chain []*x509.Certificate) (err error) 
 	p.Subject = NameRepr(p.Certificate.Subject)
 	p.Issuer = NameRepr(p.Certificate.Issuer)
 	p.Identity, err = getIdentity(p)
+
+	// For RFC proxies, need to remove the proxyCertInfoOid from the unhandled critical extensions,
+	// since we already have
+	removeProxyCertInfo(p.Certificate, proxyCertInfoOid)
+	for _, c := range p.Chain {
+		removeProxyCertInfo(c, proxyCertInfoOid)
+	}
+
 	return
+}
+
+// drop the proxyCertInfoOid critical extension
+func removeProxyCertInfo(c *x509.Certificate, id asn1.ObjectIdentifier) {
+	index := -1
+	for i := range c.UnhandledCriticalExtensions {
+		if c.UnhandledCriticalExtensions[i].Equal(id) {
+			index = i
+			break
+		}
+	}
+	if index >= 0 {
+		c.UnhandledCriticalExtensions = append(
+			c.UnhandledCriticalExtensions[:index], c.UnhandledCriticalExtensions[index+1:]...,
+		)
+	}
 }
 
 // DecodeFromFile loads a X509 proxy from a file.
