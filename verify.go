@@ -80,6 +80,10 @@ func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
 	maxPathLen := eecIndex
 	parent := eec
 
+	fullChain := make([]*x509.Certificate, 0, len(p.Chain)+1)
+	fullChain = append(fullChain, p.Certificate)
+	fullChain = append(fullChain, p.Chain...)
+
 	for i := eecIndex - 1; i >= 0; i-- {
 		c := p.Chain[i]
 

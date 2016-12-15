@@ -143,7 +143,7 @@ func (p *X509Proxy) Decode(raw []byte) (err error) {
 
 // InitFromCertificate initializes the proxy from a x509 certificate
 func (p *X509Proxy) InitFromCertificates(chain []*x509.Certificate) (err error) {
-	p.Certificate, p.Chain = chain[0], chain
+	p.Certificate, p.Chain = chain[0], chain[1:]
 
 	if err = p.parseExtensions(p.Certificate); err != nil {
 		return

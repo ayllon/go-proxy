@@ -44,7 +44,7 @@ func commonAsserts(proxy *X509Proxy, t *testing.T) {
 		t.Fatal("Unexpected user dn: ", proxy.Subject)
 	}
 	if len(proxy.VomsAttributes) != 1 {
-		t.Fatal("Was expecting at one VO extension")
+		t.Fatal("Was expecting at least one VO extension")
 	}
 	if proxy.VomsAttributes[0].Vo != "dteam" {
 		t.Fatal("Expecting dteam VO")
