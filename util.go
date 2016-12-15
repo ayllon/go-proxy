@@ -18,8 +18,19 @@ package proxy
 
 import (
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
 )
+
+// getProxyCertInfo return the ProxyCertInfo extension
+func getProxyCertInfo(cert *x509.Certificate) *pkix.Extension {
+	for _, ext := range cert.Extensions {
+		if ext.Id.Equal(proxyCertInfoOid) {
+			return &ext
+		}
+	}
+	return nil
+}
 
 // getProxyType returns the proxy type of cert
 func getProxyType(cert *x509.Certificate) Type {
@@ -42,21 +53,21 @@ func isProxy(cert *x509.Certificate) bool {
 }
 
 // getEndUserCertificate returns the end user original certificate.
-func getEndUserCertificate(proxy *X509Proxy) *x509.Certificate {
+func getEndUserCertificate(proxy *X509Proxy) (int, *x509.Certificate) {
 	if proxy.ProxyType == TypeNoProxy {
-		return proxy.Certificate
+		return 0, proxy.Certificate
 	}
-	for _, cert := range proxy.Chain {
+	for i, cert := range proxy.Chain {
 		if !isProxy(cert) {
-			return cert
+			return i, cert
 		}
 	}
-	return nil
+	return 0, nil
 }
 
 // getIdentity returns the original user identity.
 func getIdentity(proxy *X509Proxy) (string, error) {
-	cert := getEndUserCertificate(proxy)
+	_, cert := getEndUserCertificate(proxy)
 	if cert == nil {
 		return "", errors.New("Could not get the end user certificate")
 	}

@@ -27,7 +27,7 @@ import (
 
 type (
 	proxyCertInfoExtension struct {
-		PCPathLenConstraint *int `asn1:"optional"`
+		PCPathLenConstraint int `asn1:"optional"`
 		ProxyPolicy         proxyPolicy
 	}
 
