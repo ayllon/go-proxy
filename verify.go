@@ -18,6 +18,7 @@ package proxy
 
 import (
 	"crypto/x509"
+	"errors"
 	"io/ioutil"
 	"path"
 )
@@ -53,6 +54,17 @@ func (p *X509Proxy) Verify(roots *x509.CertPool) error {
 	for _, intermediate := range p.Chain {
 		options.Intermediates.AddCert(intermediate)
 	}
-	_, err := p.Certificate.Verify(options)
-	return err
+
+	// From RFC3820, verify first the End Entity Certificate
+	eec := getEndUserCertificate(p)
+	if eec == nil {
+		return errors.New("Can not find the End Entity Certificate")
+	}
+
+	if _, err := eec.Verify(options); err != nil {
+		return err
+	}
+
+	// TODO: Once the EEC is verified, we validate the proxy chain
+	return nil
 }
