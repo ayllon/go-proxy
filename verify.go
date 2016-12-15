@@ -18,6 +18,7 @@ package proxy
 
 import (
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"errors"
 	"fmt"
@@ -77,15 +78,15 @@ func (p *X509Proxy) Verify(roots *x509.CertPool) error {
 // Follow the proxy chain until the EEC
 // See https://tools.ietf.org/html/rfc3820#section-4
 func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
-	maxPathLen := eecIndex
+	maxPathLen := eecIndex + 1
 	parent := eec
 
 	fullChain := make([]*x509.Certificate, 0, len(p.Chain)+1)
 	fullChain = append(fullChain, p.Certificate)
 	fullChain = append(fullChain, p.Chain...)
 
-	for i := eecIndex - 1; i >= 0; i-- {
-		c := p.Chain[i]
+	for i := eecIndex; i >= 0; i-- {
+		c := fullChain[i]
 
 		// a.1 The certificate was signed by the parent
 		if err := parent.CheckSignature(c.SignatureAlgorithm, c.RawTBSCertificate, c.Signature); err != nil {
@@ -98,14 +99,16 @@ func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
 		}
 		// a.3 The certificate issuer name is the parent issuer name
 		if !reflect.DeepEqual(c.Issuer, parent.Subject) {
-			issuerSubject := NameRepr(c.Issuer)
-			parentSubject := NameRepr(parent.Subject)
 			return fmt.Errorf(
-				"Issuer does not match parent subject: %s != %s", issuerSubject, parentSubject,
+				"Issuer does not match parent subject: %s != %s",
+				NameRepr(c.Issuer), NameRepr(parent.Subject),
 			)
 		}
 		// a.4 The certificate subject name is the issuer name plus a CN appended
-		// TODO
+		diff := nameDiff(&c.Issuer, &c.Subject)
+		if len(diff) != 1 || !diff[0].Type.Equal(cnNameOid) {
+			return fmt.Errorf("Invalid subject name: %s (%q)", NameRepr(c.Subject), diff)
+		}
 
 		// b
 		proxyCertInfoExt := getProxyCertInfo(c)
@@ -136,4 +139,14 @@ func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
 	}
 
 	return nil
+}
+
+// nameDiff returns the remaining of b once removed, in order, all elements of a
+func nameDiff(a, b *pkix.Name) []pkix.AttributeTypeAndValue {
+	for i := 0; i < len(b.Names) && i < len(a.Names); i++ {
+		if !reflect.DeepEqual(b.Names[i], a.Names[i]) {
+			return b.Names[i:]
+		}
+	}
+	return b.Names[len(a.Names):]
 }

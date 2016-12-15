@@ -24,6 +24,11 @@ import (
 	"strings"
 )
 
+var (
+	dcNameOid = asn1.ObjectIdentifier{0, 9, 2342, 19200300, 100, 1, 25}
+	cnNameOid = asn1.ObjectIdentifier{2, 5, 4, 3}
+)
+
 // NameRepr generates a string representation of the pkix.Name
 func NameRepr(name pkix.Name) string {
 	components := make([]string, 0, 10)
@@ -51,7 +56,7 @@ func NameRepr(name pkix.Name) string {
 			case 11:
 				components = append(components, fmt.Sprintf("OU=%s", value))
 			}
-		} else if t.Equal(asn1.ObjectIdentifier{0, 9, 2342, 19200300, 100, 1, 25}) {
+		} else if t.Equal(dcNameOid) {
 			components = append(components, fmt.Sprintf("DC=%s", value))
 		}
 	}
