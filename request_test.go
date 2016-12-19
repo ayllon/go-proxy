@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
-	"strings"
+	"io/ioutil"
+	"reflect"
 	"testing"
 	"time"
-	"io/ioutil"
 )
 
 // Test the creation of a proxy request.
@@ -87,10 +87,12 @@ func TestNewProxy(t *testing.T) {
 	if nested.Certificate.NotBefore.Sub(p.Certificate.NotBefore) < 0 {
 		t.Fatal("The new proxy can not start before the signing proxy")
 	}
-	if nested.Subject == p.Subject {
+	if reflect.DeepEqual(nested.Subject, p.Subject) {
 		t.Fatal("The proxy can not have the same subject as the signing proxy")
 	}
-	if !strings.Contains(nested.Subject, p.Subject+"/CN=") {
+
+	diff := nameDiff(&p.Subject, &nested.Subject)
+	if len(diff) != 1 || !diff[0].Type.Equal(commonNameOid) {
 		t.Fatalf("The proxy subject does not extend the signing proxy subject:\n\t%s\n\t%s\n",
 			nested.Subject, p.Subject)
 	}

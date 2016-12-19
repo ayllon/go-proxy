@@ -20,6 +20,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
@@ -42,8 +43,8 @@ const (
 type (
 	// VomsAttribute holds basic information about the Vo extensions of a proxy.
 	VomsAttribute struct {
-		Subject             string
-		Issuer              string
+		Subject             pkix.Name
+		Issuer              pkix.Name
 		Vo                  string
 		Fqan                string
 		NotBefore, NotAfter time.Time
@@ -58,9 +59,9 @@ type (
 		Chain       []*x509.Certificate
 		// Convenience fields
 		ProxyType      Type
-		Subject        string
-		Issuer         string
-		Identity       string
+		Subject        pkix.Name
+		Issuer         pkix.Name
+		Identity       pkix.Name
 		VomsAttributes []VomsAttribute
 	}
 )
@@ -98,7 +99,7 @@ func (p *X509Proxy) Expired() bool {
 // DelegationID returns the delegation id corresponding to the proxy.
 func (p *X509Proxy) DelegationID() string {
 	hash := sha1.New()
-	hash.Write([]byte(p.Subject))
+	hash.Write([]byte(NameRepr(p.Subject)))
 	for _, vo := range p.VomsAttributes {
 		hash.Write([]byte(vo.Fqan))
 	}
@@ -154,8 +155,8 @@ func (p *X509Proxy) InitFromCertificates(chain []*x509.Certificate) (err error) 
 		}
 	}
 	p.ProxyType = getProxyType(p.Certificate)
-	p.Subject = NameRepr(p.Certificate.Subject)
-	p.Issuer = NameRepr(p.Certificate.Issuer)
+	p.Subject = p.Certificate.Subject
+	p.Issuer = p.Certificate.Issuer
 	p.Identity, err = getIdentity(p)
 
 	// For RFC proxies, need to remove the proxyCertInfoOid from the unhandled critical extensions,

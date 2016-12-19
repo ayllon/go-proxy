@@ -28,6 +28,14 @@ import (
 	"time"
 )
 
+type (
+	// VerifyOptions  contains parameters for X509Proxy.Verify
+	VerifyOptions struct {
+		Roots   *x509.CertPool
+		VomsDir string
+	}
+)
+
 // LoadCAPath loads the certificates stored under path into a cert-pool
 func LoadCAPath(capath string) (roots *x509.CertPool, err error) {
 	roots = x509.NewCertPool()
@@ -50,15 +58,15 @@ func LoadCAPath(capath string) (roots *x509.CertPool, err error) {
 // Verify tries to verify if the proxy is trustworthy
 // If it is, it will return nil, an error otherwise.
 // TODO: Verify VO extensions
-func (p *X509Proxy) Verify(roots *x509.CertPool) error {
-	options := x509.VerifyOptions{
+func (p *X509Proxy) Verify(options *VerifyOptions) error {
+	x509Options := x509.VerifyOptions{
 		Intermediates: x509.NewCertPool(),
-		Roots:         roots,
+		Roots:         options.Roots,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
 	for _, intermediate := range p.Chain {
-		options.Intermediates.AddCert(intermediate)
+		x509Options.Intermediates.AddCert(intermediate)
 	}
 
 	// From RFC3820, verify first the End Entity Certificate
@@ -67,12 +75,17 @@ func (p *X509Proxy) Verify(roots *x509.CertPool) error {
 		return errors.New("Can not find the End Entity Certificate")
 	}
 
-	if _, err := eec.Verify(options); err != nil {
+	if _, err := eec.Verify(x509Options); err != nil {
 		return err
 	}
 
 	// Once the EEC is verified, we validate the proxy chain
-	return verifyProxyChain(p, index, eec)
+	if err := verifyProxyChain(p, index, eec); err != nil {
+		return err
+	}
+
+	// Verify VO extensions
+	return verifyVOExtensions(p, options.VomsDir)
 }
 
 // Follow the proxy chain until the EEC
@@ -135,7 +148,7 @@ func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
 		if maxPathLen <= 0 {
 			return errors.New("Max proxy chain length reached")
 		}
-		maxPathLen -= 1
+		maxPathLen--
 	}
 
 	return nil
@@ -143,10 +156,30 @@ func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
 
 // nameDiff returns the remaining of b once removed, in order, all elements of a
 func nameDiff(a, b *pkix.Name) []pkix.AttributeTypeAndValue {
+	if len(a.Names) > len(b.Names) {
+		return nil
+	}
+
 	for i := 0; i < len(b.Names) && i < len(a.Names); i++ {
 		if !reflect.DeepEqual(b.Names[i], a.Names[i]) {
 			return b.Names[i:]
 		}
 	}
 	return b.Names[len(a.Names):]
+}
+
+// verifyVoExtensions verifies the VO extensions present on the proxy
+func verifyVOExtensions(p *X509Proxy, vomsdir string) error {
+	for _, attr := range p.VomsAttributes {
+		if err := verifyVOExtension(attr, vomsdir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// verifyVOExtension verify a voms attribute
+func verifyVOExtension(attr VomsAttribute, vomsdir string) error {
+	_ = path.Join(vomsdir, attr.Vo)
+	return nil
 }

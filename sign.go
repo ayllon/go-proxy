@@ -113,7 +113,7 @@ func (p *X509Proxy) SignRequest(req *X509ProxyRequest, lifetime time.Duration) (
 		Key:            nil,
 		Chain:          make([]*x509.Certificate, 0, len(p.Chain)+1),
 		ProxyType:      p.ProxyType,
-		Subject:        NameRepr(cert.Subject),
+		Subject:        cert.Subject,
 		Issuer:         p.Subject,
 		Identity:       p.Identity,
 		VomsAttributes: make([]VomsAttribute, len(p.VomsAttributes)),

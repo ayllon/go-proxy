@@ -170,7 +170,7 @@ func parseGeneralName(v asn1.RawValue) (string, error) {
 }
 
 // parseAttCertIssuer parses the AttCertIssuer choice
-func parseAttCertIssuer(v asn1.RawValue) (string, error) {
+func parseAttCertIssuer(v asn1.RawValue) (*pkix.Name, error) {
 	// AttCertIssuer ::= CHOICE {
 	//      v1Form      GeneralNames,  -- MUST NOT be used in this profile
 	//	v2Form  [0] V2Form         -- v2 only
@@ -182,15 +182,28 @@ func parseAttCertIssuer(v asn1.RawValue) (string, error) {
 	// }
 
 	if v.Tag != 0 {
-		return "", errors.New("Only V2Form supported for AttCertIssuer")
+		return nil, errors.New("Only V2Form supported for AttCertIssuer")
 	}
 
 	var v2form v2Form
 	if _, err := asn1.Unmarshal(v.Bytes, &v2form); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return parseGeneralName(v2form.IssuerName)
+	switch v2form.IssuerName.Tag {
+	// Name
+	case 4:
+		var nameSeq pkix.RDNSequence
+		if _, err := asn1.Unmarshal(v2form.IssuerName.Bytes, &nameSeq); err != nil {
+			return nil, err
+		}
+		var name pkix.Name
+		name.FillFromRDNSequence(&nameSeq)
+		return &name, nil
+	// Unknown
+	default:
+		return nil, fmt.Errorf("Unsupported GeneralName tag for Issuer field: %d", v2form.IssuerName.Tag)
+	}
 }
 
 // parseVomsAttribute parsed the voms extension
@@ -221,14 +234,14 @@ func parseVomsAttribute(cert *x509.Certificate, ac *attributeCertificate) (vomsA
 			return
 		}
 
-		var issuer string
+		var issuer *pkix.Name
 		if issuer, err = parseAttCertIssuer(ac.AcInfo.Issuer); err != nil {
 			return
 		}
 
 		vomsAttr = &VomsAttribute{
-			Subject:         NameRepr(cert.Subject),
-			Issuer:          issuer,
+			Subject:         cert.Subject,
+			Issuer:          *issuer,
 			Vo:              vo,
 			Fqan:            fqan,
 			NotAfter:        ac.AcInfo.Validity.NotAfter,

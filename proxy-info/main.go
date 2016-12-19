@@ -39,6 +39,7 @@ func getProxyPath() string {
 
 func main() {
 	capath := flag.String("capath", "/etc/grid-security/certificates", "Directory with the root CAs")
+	vomsdir := flag.String("vomsdir", "/etc/grid-security/vomsdir/", "VOMS dir")
 
 	flag.Parse()
 
@@ -51,9 +52,9 @@ func main() {
 		log.Fatal(e)
 	}
 
-	fmt.Printf("subject   : %s\n", p.Subject)
-	fmt.Printf("issuer    : %s\n", p.Issuer)
-	fmt.Printf("identity  : %s\n", p.Identity)
+	fmt.Printf("subject   : %s\n", proxy.NameRepr(p.Subject))
+	fmt.Printf("issuer    : %s\n", proxy.NameRepr(p.Issuer))
+	fmt.Printf("identity  : %s\n", proxy.NameRepr(p.Identity))
 	fmt.Printf("type      : %s\n", typeRepr[p.ProxyType])
 	fmt.Printf("strength  : %d bits\n", p.Certificate.PublicKey.(*rsa.PublicKey).N.BitLen())
 	fmt.Printf("timeleft  : %s\n", p.Certificate.NotAfter.Sub(time.Now()))
@@ -63,8 +64,8 @@ func main() {
 	}
 	for _, v := range p.VomsAttributes {
 		fmt.Printf("VO        : %s\n", v.Vo)
-		fmt.Printf("subject   : %s\n", v.Subject)
-		fmt.Printf("issuer    : %s\n", v.Issuer)
+		fmt.Printf("subject   : %s\n", proxy.NameRepr(v.Subject))
+		fmt.Printf("issuer    : %s\n", proxy.NameRepr(v.Issuer))
 		fmt.Printf("attribute : %s\n", v.Fqan)
 		fmt.Printf("timeleft  : %s\n", v.NotAfter.Sub(time.Now()))
 		fmt.Printf("uri       : %s\n", v.PolicyAuthority)
@@ -72,7 +73,10 @@ func main() {
 
 	if roots, err := proxy.LoadCAPath(*capath); err != nil {
 		fmt.Printf("Failed to load the root CA: %s", err)
-	} else if err = p.Verify(roots); err != nil {
+	} else if err = p.Verify(&proxy.VerifyOptions{
+		Roots:   roots,
+		VomsDir: *vomsdir,
+	}); err != nil {
 		fmt.Printf("Verification result: %s\n", err)
 	} else {
 		fmt.Printf("Verification OK\n")

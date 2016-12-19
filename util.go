@@ -66,10 +66,10 @@ func getEndUserCertificate(proxy *X509Proxy) (int, *x509.Certificate) {
 }
 
 // getIdentity returns the original user identity.
-func getIdentity(proxy *X509Proxy) (string, error) {
+func getIdentity(proxy *X509Proxy) (pkix.Name, error) {
 	_, cert := getEndUserCertificate(proxy)
 	if cert == nil {
-		return "", errors.New("Could not get the end user certificate")
+		return pkix.Name{}, errors.New("Could not get the end user certificate")
 	}
-	return NameRepr(cert.Subject), nil
+	return cert.Subject, nil
 }

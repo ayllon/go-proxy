@@ -40,7 +40,7 @@ func commonAsserts(proxy *X509Proxy, t *testing.T) {
 	if proxy.Key != nil {
 		t.Fatal("Unexpected private key")
 	}
-	if proxy.Identity != "/DC=ch/DC=cern/OU=Organic Units/OU=Users/CN=saketag/CN=678984/CN=Alejandro Alvarez Ayllon" {
+	if NameRepr(proxy.Identity) != "/DC=ch/DC=cern/OU=Organic Units/OU=Users/CN=saketag/CN=678984/CN=Alejandro Alvarez Ayllon" {
 		t.Fatal("Unexpected user dn: ", proxy.Subject)
 	}
 	if len(proxy.VomsAttributes) != 1 {
