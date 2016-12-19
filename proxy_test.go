@@ -65,13 +65,15 @@ func loadChain(paths ...string) ([]byte, error) {
 	var full []byte
 
 	for _, file := range paths {
+		var content []byte
+		var err error
+
 		fullPath := path.Join("test-samples", file)
-		if content, err := ioutil.ReadFile(fullPath); err != nil {
+		if content, err = ioutil.ReadFile(fullPath); err != nil {
 			return nil, err
-		} else {
-			full = append(full, content...)
-			full = append(full, '\n')
 		}
+		full = append(full, content...)
+		full = append(full, '\n')
 	}
 
 	return full, nil
