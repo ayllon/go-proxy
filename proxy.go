@@ -43,12 +43,17 @@ const (
 type (
 	// VomsAttribute holds basic information about the Vo extensions of a proxy.
 	VomsAttribute struct {
+		Raw                 []byte
 		Subject             pkix.Name
 		Issuer              pkix.Name
 		Vo                  string
 		Fqan                string
 		NotBefore, NotAfter time.Time
 		PolicyAuthority     string
+
+		SignatureAlgorithm pkix.AlgorithmIdentifier
+		SignatureValue     asn1.BitString
+		Chain              []*x509.Certificate
 	}
 
 	// X509Proxy holds an X509 proxy.

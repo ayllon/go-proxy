@@ -29,19 +29,23 @@ import (
 )
 
 var (
-	vomsExtOid                = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 8005, 100, 100, 5}
 	vomsAttrOid               = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 8005, 100, 100, 4}
+	vomsExtOid                = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 8005, 100, 100, 5}
+	vomsCertsOid              = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 8005, 100, 100, 10}
 	proxyCertInfoOid          = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 14}
 	proxyCertInfoLegacyOid    = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 3536, 1, 222}
 	proxyPolicyAnyLanguageOid = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 0}
 	proxyPolicyInheritAllOid  = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 1}
 	proxyPolicyIndependentOid = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 21, 2}
+	authorityKeyOid           = asn1.ObjectIdentifier{2, 5, 29, 35}
 )
 
 type (
 	// This is the structure of the extension
 	// Defined in RFC 5755
 	attributeCertificate struct {
+		Raw asn1.RawContent
+
 		AcInfo             attributeCertificateInfo
 		SignatureAlgorithm pkix.AlgorithmIdentifier
 		SignatureValue     asn1.BitString
@@ -52,6 +56,8 @@ type (
 	}
 
 	attributeCertificateInfo struct {
+		Raw asn1.RawContent
+
 		Version        int
 		Holder         holder
 		Issuer         asn1.RawValue
@@ -123,14 +129,22 @@ func (h *holder) isHolder(cert *x509.Certificate) bool {
 }
 
 // getAttribute returns the attribute stored with the given OID
-func (aci *attributeCertificateInfo) getAttribute(oid asn1.ObjectIdentifier) (a *attribute) {
-	for i, attr := range aci.Attributes {
-		if attr.Type.Equal(oid) {
-			a = &aci.Attributes[i]
-			break
+func (aci *attributeCertificateInfo) getAttribute(oid asn1.ObjectIdentifier) *attribute {
+	for i := range aci.Attributes {
+		if aci.Attributes[i].Type.Equal(oid) {
+			return &aci.Attributes[i]
 		}
 	}
-	return
+	return nil
+}
+
+func (aci *attributeCertificateInfo) getExtension(oid asn1.ObjectIdentifier) *pkix.Extension {
+	for i := range aci.Extensions {
+		if aci.Extensions[i].Id.Equal(oid) {
+			return &aci.Extensions[i]
+		}
+	}
+	return nil
 }
 
 // processVoExtension parses a general name from the raw value
@@ -206,8 +220,9 @@ func parseAttCertIssuer(v asn1.RawValue) (*pkix.Name, error) {
 	}
 }
 
-// parseVomsAttribute parsed the voms extension
+// parseVomsAttribute parses the voms extension
 func parseVomsAttribute(cert *x509.Certificate, ac *attributeCertificate) (vomsAttr *VomsAttribute, err error) {
+	// VOMS attributes
 	if rawAttr := ac.AcInfo.getAttribute(vomsAttrOid); rawAttr != nil {
 		if !rawAttr.Value.IsCompound {
 			return nil, errors.New("Expecting a compound attribute")
@@ -240,13 +255,32 @@ func parseVomsAttribute(cert *x509.Certificate, ac *attributeCertificate) (vomsA
 		}
 
 		vomsAttr = &VomsAttribute{
-			Subject:         cert.Subject,
-			Issuer:          *issuer,
-			Vo:              vo,
-			Fqan:            fqan,
-			NotAfter:        ac.AcInfo.Validity.NotAfter,
-			NotBefore:       ac.AcInfo.Validity.NotBefore,
-			PolicyAuthority: policyAuthority,
+			Raw: ac.AcInfo.Raw,
+
+			Subject:            cert.Subject,
+			Issuer:             *issuer,
+			Vo:                 vo,
+			Fqan:               fqan,
+			NotAfter:           ac.AcInfo.Validity.NotAfter,
+			NotBefore:          ac.AcInfo.Validity.NotBefore,
+			PolicyAuthority:    policyAuthority,
+			SignatureAlgorithm: ac.SignatureAlgorithm,
+			SignatureValue:     ac.SignatureValue,
+		}
+		// VOMS issuer certificates
+		if rawExt := ac.AcInfo.getExtension(vomsCertsOid); rawExt != nil {
+			var values []asn1.RawValue
+			_, err := asn1.Unmarshal(rawExt.Value, &values)
+			if err != nil {
+				return nil, err
+			}
+			for i := range values {
+				cert, err := x509.ParseCertificate(values[i].Bytes)
+				if err != nil {
+					return nil, err
+				}
+				vomsAttr.Chain = append(vomsAttr.Chain, cert)
+			}
 		}
 	}
 	return
@@ -255,7 +289,7 @@ func parseVomsAttribute(cert *x509.Certificate, ac *attributeCertificate) (vomsA
 // parseVomsAttribute parses the VO extensions.
 // It looks if there is a known certificate in the chain for which the extensions were issued,
 // and process them.
-func (proxy *X509Proxy) getVomsAttribute(ac *attributeCertificate) (vomsAttr *VomsAttribute, err error) {
+func (proxy *X509Proxy) getVomsAttribute(ac *attributeCertificate) (*VomsAttribute, error) {
 	if ac.AcInfo.Holder.isHolder(proxy.Certificate) {
 		return parseVomsAttribute(proxy.Certificate, ac)
 	}
@@ -264,7 +298,7 @@ func (proxy *X509Proxy) getVomsAttribute(ac *attributeCertificate) (vomsAttr *Vo
 			return parseVomsAttribute(cert, ac)
 		}
 	}
-	return
+	return nil, nil
 }
 
 // parseVomsExtensions parses the Voms extensions

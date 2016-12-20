@@ -17,12 +17,16 @@
 package proxy
 
 import (
+	"bufio"
+	"crypto"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"reflect"
 	"time"
@@ -31,14 +35,52 @@ import (
 type (
 	// VerifyOptions  contains parameters for X509Proxy.Verify
 	VerifyOptions struct {
-		Roots   *x509.CertPool
+		Roots   *CertPool
 		VomsDir string
+	}
+
+	// CertPool is a set of trusted certificates.
+	CertPool struct {
+		certPool       *x509.CertPool
+		bySubjectKeyId map[string]*x509.Certificate
+		byName         map[string]*x509.Certificate
 	}
 )
 
+// AppendCertsFromPEM attempts to parse a series of PEM encoded certificates.
+// It appends any certificates found to s and reports whether any certificates
+// were successfully parsed.
+func (s *CertPool) AppendCertsFromPEM(pemCerts []byte) (ok bool) {
+	for len(pemCerts) > 0 {
+		var block *pem.Block
+		block, pemCerts = pem.Decode(pemCerts)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			continue
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue
+		}
+
+		s.certPool.AddCert(cert)
+		s.byName[NameRepr(cert.Subject)] = cert
+		s.bySubjectKeyId[string(cert.SubjectKeyId)] = cert
+		ok = true
+	}
+	return
+}
+
 // LoadCAPath loads the certificates stored under path into a cert-pool
-func LoadCAPath(capath string) (roots *x509.CertPool, err error) {
-	roots = x509.NewCertPool()
+func LoadCAPath(capath string) (roots *CertPool, err error) {
+	roots = &CertPool{
+		certPool:       x509.NewCertPool(),
+		bySubjectKeyId: make(map[string]*x509.Certificate),
+		byName:         make(map[string]*x509.Certificate),
+	}
 
 	entries, err := ioutil.ReadDir(capath)
 	for _, file := range entries {
@@ -57,11 +99,11 @@ func LoadCAPath(capath string) (roots *x509.CertPool, err error) {
 
 // Verify tries to verify if the proxy is trustworthy
 // If it is, it will return nil, an error otherwise.
-// TODO: Verify VO extensions
+// TODO: CRL
 func (p *X509Proxy) Verify(options *VerifyOptions) error {
 	x509Options := x509.VerifyOptions{
 		Intermediates: x509.NewCertPool(),
-		Roots:         options.Roots,
+		Roots:         options.Roots.certPool,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
@@ -85,7 +127,7 @@ func (p *X509Proxy) Verify(options *VerifyOptions) error {
 	}
 
 	// Verify VO extensions
-	return verifyVOExtensions(p, options.VomsDir)
+	return verifyVOExtensions(p, options)
 }
 
 // Follow the proxy chain until the EEC
@@ -169,9 +211,9 @@ func nameDiff(a, b *pkix.Name) []pkix.AttributeTypeAndValue {
 }
 
 // verifyVoExtensions verifies the VO extensions present on the proxy
-func verifyVOExtensions(p *X509Proxy, vomsdir string) error {
+func verifyVOExtensions(p *X509Proxy, options *VerifyOptions) error {
 	for _, attr := range p.VomsAttributes {
-		if err := verifyVOExtension(attr, vomsdir); err != nil {
+		if err := verifyVOExtension(attr, options); err != nil {
 			return err
 		}
 	}
@@ -179,7 +221,110 @@ func verifyVOExtensions(p *X509Proxy, vomsdir string) error {
 }
 
 // verifyVOExtension verify a voms attribute
-func verifyVOExtension(attr VomsAttribute, vomsdir string) error {
-	_ = path.Join(vomsdir, attr.Vo)
+func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
+	// Verify the signature
+	if len(attr.Chain) == 0 {
+		return fmt.Errorf("Can not find the issuer certificate on the proxy")
+	}
+
+	err := attr.Chain[0].CheckSignature(
+		getSignatureAlgorithmFromOID(attr.SignatureAlgorithm.Algorithm), attr.Raw, attr.SignatureValue.Bytes,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Verify the extension issuer chain
+	intermediates := &x509.CertPool{}
+	for _, cert := range attr.Chain[1:] {
+		intermediates.AddCert(cert)
+	}
+
+	verifycationChains, err := attr.Chain[0].Verify(x509.VerifyOptions{
+		Intermediates: intermediates,
+		Roots:         options.Roots.certPool,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Signature is good, and so is the issuer chain
+	// But now, the issuer chain must have been configured on the .lsc file
+	lscName := attr.Issuer.CommonName + ".lsc"
+	lscPath := path.Join(options.VomsDir, attr.Vo, lscName)
+	fd, err := os.Open(lscPath)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+
+	scanner := bufio.NewScanner(fd)
+
+	for _, cert := range verifycationChains[0] {
+		if !scanner.Scan() {
+			if scanner.Err() != nil {
+				return scanner.Err()
+			}
+			return fmt.Errorf("Reached EOF when reading the lsc file")
+		}
+
+		expected := scanner.Text()
+		if NameRepr(cert.Subject) != expected {
+			return fmt.Errorf(
+				"Failed to validate the VOMS attribute chain: %s != %s",
+				NameRepr(cert.Issuer), expected,
+			)
+		}
+	}
+
 	return nil
+}
+
+/*
+ * Copied from x509.go, since this is not exposed :(
+ */
+
+var (
+	oidSignatureMD2WithRSA      = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 2}
+	oidSignatureMD5WithRSA      = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 4}
+	oidSignatureSHA1WithRSA     = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 5}
+	oidSignatureSHA256WithRSA   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 11}
+	oidSignatureSHA384WithRSA   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 12}
+	oidSignatureSHA512WithRSA   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 13}
+	oidSignatureDSAWithSHA1     = asn1.ObjectIdentifier{1, 2, 840, 10040, 4, 3}
+	oidSignatureDSAWithSHA256   = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 3, 2}
+	oidSignatureECDSAWithSHA1   = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 1}
+	oidSignatureECDSAWithSHA256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}
+	oidSignatureECDSAWithSHA384 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 3}
+	oidSignatureECDSAWithSHA512 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 4}
+)
+
+var signatureAlgorithmDetails = []struct {
+	algo       x509.SignatureAlgorithm
+	oid        asn1.ObjectIdentifier
+	pubKeyAlgo x509.PublicKeyAlgorithm
+	hash       crypto.Hash
+}{
+	{x509.MD2WithRSA, oidSignatureMD2WithRSA, x509.RSA, crypto.Hash(0) /* no value for MD2 */},
+	{x509.MD5WithRSA, oidSignatureMD5WithRSA, x509.RSA, crypto.MD5},
+	{x509.SHA1WithRSA, oidSignatureSHA1WithRSA, x509.RSA, crypto.SHA1},
+	{x509.SHA256WithRSA, oidSignatureSHA256WithRSA, x509.RSA, crypto.SHA256},
+	{x509.SHA384WithRSA, oidSignatureSHA384WithRSA, x509.RSA, crypto.SHA384},
+	{x509.SHA512WithRSA, oidSignatureSHA512WithRSA, x509.RSA, crypto.SHA512},
+	{x509.DSAWithSHA1, oidSignatureDSAWithSHA1, x509.DSA, crypto.SHA1},
+	{x509.DSAWithSHA256, oidSignatureDSAWithSHA256, x509.DSA, crypto.SHA256},
+	{x509.ECDSAWithSHA1, oidSignatureECDSAWithSHA1, x509.ECDSA, crypto.SHA1},
+	{x509.ECDSAWithSHA256, oidSignatureECDSAWithSHA256, x509.ECDSA, crypto.SHA256},
+	{x509.ECDSAWithSHA384, oidSignatureECDSAWithSHA384, x509.ECDSA, crypto.SHA384},
+	{x509.ECDSAWithSHA512, oidSignatureECDSAWithSHA512, x509.ECDSA, crypto.SHA512},
+}
+
+func getSignatureAlgorithmFromOID(oid asn1.ObjectIdentifier) x509.SignatureAlgorithm {
+	for _, details := range signatureAlgorithmDetails {
+		if oid.Equal(details.oid) {
+			return details.algo
+		}
+	}
+	return x509.UnknownSignatureAlgorithm
 }
