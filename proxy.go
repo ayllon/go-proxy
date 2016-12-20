@@ -255,21 +255,21 @@ func isProxy(cert *x509.Certificate) bool {
 }
 
 // getEndUserCertificate returns the end user original certificate.
-func (p *X509Proxy) getEndUserCertificate() (int, *x509.Certificate) {
+func (p *X509Proxy) getEndUserCertificate() *x509.Certificate {
 	if p.ProxyType == TypeNoProxy {
-		return 0, &p.Certificate
+		return &p.Certificate
 	}
-	for i, cert := range p.Chain {
+	for _, cert := range p.Chain {
 		if !isProxy(cert) {
-			return i, cert
+			return cert
 		}
 	}
-	return 0, nil
+	return nil
 }
 
 // getIdentity returns the original user identity.
 func (p *X509Proxy) getIdentity() (pkix.Name, error) {
-	_, cert := p.getEndUserCertificate()
+	cert := p.getEndUserCertificate()
 	if cert == nil {
 		return pkix.Name{}, errors.New("Could not get the end user certificate")
 	}

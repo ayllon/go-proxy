@@ -139,7 +139,7 @@ func (p *X509Proxy) Verify(options *VerifyOptions) error {
 	}
 
 	// From RFC3820, verify first the End Entity Certificate
-	index, eec := p.getEndUserCertificate()
+	eec := p.getEndUserCertificate()
 	if eec == nil {
 		return &VerificationError{
 			hint: errors.New("Can not find the End Entity Certificate"),
@@ -154,7 +154,7 @@ func (p *X509Proxy) Verify(options *VerifyOptions) error {
 	}
 
 	// Once the EEC is verified, we validate the proxy chain
-	if err := p.verifyProxyChain(index, eec); err != nil {
+	if err := p.verifyProxyChain(eec); err != nil {
 		return err
 	}
 
@@ -164,15 +164,30 @@ func (p *X509Proxy) Verify(options *VerifyOptions) error {
 
 // Follow the proxy chain until the EEC
 // See https://tools.ietf.org/html/rfc3820#section-4
-func (p *X509Proxy) verifyProxyChain(eecIndex int, eec *x509.Certificate) error {
-	maxPathLen := eecIndex + 1
-	parent := eec
-
+func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate) error {
+	// Build the full chain, including the proxy
 	fullChain := make([]*x509.Certificate, 0, len(p.Chain)+1)
 	fullChain = append(fullChain, &p.Certificate)
 	fullChain = append(fullChain, p.Chain...)
 
-	for i := eecIndex; i >= 0; i-- {
+	// Find the EEC on the chain
+	eecIndex := 0
+	for eecIndex = 0; eecIndex < len(fullChain); eecIndex++ {
+		if fullChain[eecIndex].Equal(eec) {
+			break
+		}
+	}
+	if eecIndex >= len(fullChain) {
+		return &VerificationError{
+			hint: errors.New("Could not find the EEC on the chain"),
+		}
+	}
+
+	// The cert on eecIndex is the EEC certificate, which has been already validated
+	// So we start with the next one on the stack
+	maxPathLen := eecIndex
+	parent := eec
+	for i := eecIndex - 1; i >= 0; i-- {
 		c := fullChain[i]
 
 		// a.1 The certificate was signed by the parent
@@ -243,6 +258,9 @@ func (p *X509Proxy) verifyProxyChain(eecIndex int, eec *x509.Certificate) error 
 			}
 		}
 		maxPathLen--
+
+		// This one has been verified, it becomes the parent of the next one
+		parent = c
 	}
 
 	return nil
