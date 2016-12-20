@@ -45,7 +45,34 @@ type (
 		bySubjectKeyId map[string]*x509.Certificate
 		byName         map[string]*x509.Certificate
 	}
+
+	// VerificationError is returned when there has been an error validating the main proxy chain
+	VerificationError struct {
+		hint   error
+		nested error
+	}
+
+	// VOVerificationError is returned when there has been an error validating the VO extensions
+	VOVerificationError struct {
+		VerificationError
+	}
 )
+
+// String returns the human readable representation of a verification error
+func (e *VerificationError) Error() string {
+	if e.nested != nil {
+		return fmt.Sprint("Verification error: ", e.hint, " (", e.nested, ")")
+	}
+	return fmt.Sprint("Verification error: ", e.hint)
+}
+
+// String returns the human readable representation of a VO verification error
+func (e *VOVerificationError) Error() string {
+	if e.nested != nil {
+		return fmt.Sprint("VOMS verification error: ", e.hint, " (", e.nested, ")")
+	}
+	return fmt.Sprint("VOMS verification error: ", e.hint)
+}
 
 // AppendCertsFromPEM attempts to parse a series of PEM encoded certificates.
 // It appends any certificates found to s and reports whether any certificates
@@ -114,25 +141,30 @@ func (p *X509Proxy) Verify(options *VerifyOptions) error {
 	// From RFC3820, verify first the End Entity Certificate
 	index, eec := p.getEndUserCertificate()
 	if eec == nil {
-		return errors.New("Can not find the End Entity Certificate")
+		return &VerificationError{
+			hint: errors.New("Can not find the End Entity Certificate"),
+		}
 	}
 
 	if _, err := eec.Verify(x509Options); err != nil {
-		return err
+		return &VerificationError{
+			hint:   errors.New("Failed to verify the proxy chain"),
+			nested: err,
+		}
 	}
 
 	// Once the EEC is verified, we validate the proxy chain
-	if err := verifyProxyChain(p, index, eec); err != nil {
+	if err := p.verifyProxyChain(index, eec); err != nil {
 		return err
 	}
 
 	// Verify VO extensions
-	return verifyVOExtensions(p, options)
+	return p.verifyVOExtensions(options)
 }
 
 // Follow the proxy chain until the EEC
 // See https://tools.ietf.org/html/rfc3820#section-4
-func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
+func (p *X509Proxy) verifyProxyChain(eecIndex int, eec *x509.Certificate) error {
 	maxPathLen := eecIndex + 1
 	parent := eec
 
@@ -145,37 +177,55 @@ func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
 
 		// a.1 The certificate was signed by the parent
 		if err := parent.CheckSignature(c.SignatureAlgorithm, c.RawTBSCertificate, c.Signature); err != nil {
-			return err
+			return &VerificationError{
+				hint: fmt.Errorf(
+					"Certificate '%s' not signed by '%s'", NameRepr(c.Subject), NameRepr(parent.Subject),
+				),
+				nested: err,
+			}
 		}
 		// a.2 The certificate validity period includes the current time
 		now := time.Now()
 		if c.NotBefore.Sub(now) > 0 || c.NotAfter.Sub(now) < 0 {
-			return x509.CertificateInvalidError{c, x509.Expired}
+			return &VerificationError{
+				hint: x509.CertificateInvalidError{c, x509.Expired},
+			}
 		}
 		// a.3 The certificate issuer name is the parent issuer name
 		if !reflect.DeepEqual(c.Issuer, parent.Subject) {
-			return fmt.Errorf(
-				"Issuer does not match parent subject: %s != %s",
-				NameRepr(c.Issuer), NameRepr(parent.Subject),
-			)
+			return &VerificationError{
+				hint: fmt.Errorf(
+					"Issuer does not match parent subject: %s != %s",
+					NameRepr(c.Issuer), NameRepr(parent.Subject),
+				),
+			}
 		}
 		// a.4 The certificate subject name is the issuer name plus a CN appended
 		diff := nameDiff(&c.Issuer, &c.Subject)
 		if len(diff) != 1 || !diff[0].Type.Equal(cnNameOid) {
-			return fmt.Errorf("Invalid subject name: %s (%q)", NameRepr(c.Subject), diff)
+			return &VerificationError{
+				hint: fmt.Errorf("Invalid subject name: %s (%q)", NameRepr(c.Subject), diff),
+			}
 		}
 
 		// b
 		proxyCertInfoExt := getProxyCertInfo(c)
 		if proxyCertInfoExt == nil {
-			return errors.New("Only RFC3820 proxies are supported for validation")
+			return &VerificationError{
+				hint: errors.New("Only RFC3820 proxies are supported for validation"),
+			}
 		}
 		if !proxyCertInfoExt.Critical {
-			return errors.New("ProxyCertInfo extension must be critical")
+			return &VerificationError{
+				hint: errors.New("ProxyCertInfo extension must be critical"),
+			}
 		}
 		proxyCertInfo := proxyCertInfoExtension{}
 		if _, err := asn1.Unmarshal(proxyCertInfoExt.Value, &proxyCertInfo); err != nil {
-			return err
+			return &VerificationError{
+				hint:   errors.New("Failed to unmarshal the proxy cert info extension"),
+				nested: err,
+			}
 		}
 
 		// b.1 pCPathLenConstraint
@@ -188,7 +238,9 @@ func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
 		// d TODO
 
 		if maxPathLen <= 0 {
-			return errors.New("Max proxy chain length reached")
+			return &VerificationError{
+				hint: errors.New("Max proxy chain length reached"),
+			}
 		}
 		maxPathLen--
 	}
@@ -211,7 +263,7 @@ func nameDiff(a, b *pkix.Name) []pkix.AttributeTypeAndValue {
 }
 
 // verifyVoExtensions verifies the VO extensions present on the proxy
-func verifyVOExtensions(p *X509Proxy, options *VerifyOptions) error {
+func (p *X509Proxy) verifyVOExtensions(options *VerifyOptions) error {
 	for _, attr := range p.VomsAttributes {
 		if err := verifyVOExtension(attr, options); err != nil {
 			return err
@@ -224,14 +276,19 @@ func verifyVOExtensions(p *X509Proxy, options *VerifyOptions) error {
 func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
 	// Verify the signature
 	if len(attr.Chain) == 0 {
-		return fmt.Errorf("Can not find the issuer certificate on the proxy")
+		return &VOVerificationError{VerificationError{
+			hint: fmt.Errorf("Can not find the extension issuer certificate on the proxy"),
+		}}
 	}
 
 	err := attr.Chain[0].CheckSignature(
 		getSignatureAlgorithmFromOID(attr.SignatureAlgorithm.Algorithm), attr.Raw, attr.SignatureValue.Bytes,
 	)
 	if err != nil {
-		return err
+		return &VOVerificationError{VerificationError{
+			hint:   errors.New("Failed to verify the VO extension signature"),
+			nested: err,
+		}}
 	}
 
 	// Verify the extension issuer chain
@@ -246,7 +303,10 @@ func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	})
 	if err != nil {
-		return err
+		return &VOVerificationError{VerificationError{
+			hint:   errors.New("Failed to verify the VO extension issuer certificate"),
+			nested: err,
+		}}
 	}
 
 	// Signature is good, and so is the issuer chain
@@ -255,7 +315,10 @@ func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
 	lscPath := path.Join(options.VomsDir, attr.Vo, lscName)
 	fd, err := os.Open(lscPath)
 	if err != nil {
-		return err
+		return &VOVerificationError{VerificationError{
+			hint:   errors.New("Coult nout open the .lsc file"),
+			nested: err,
+		}}
 	}
 	defer fd.Close()
 
@@ -263,18 +326,20 @@ func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
 
 	for _, cert := range verifycationChains[0] {
 		if !scanner.Scan() {
-			if scanner.Err() != nil {
-				return scanner.Err()
-			}
-			return fmt.Errorf("Reached EOF when reading the lsc file")
+			return &VOVerificationError{VerificationError{
+				hint:   errors.New("Reached EOF when reading the lsc file"),
+				nested: scanner.Err(),
+			}}
 		}
 
 		expected := scanner.Text()
 		if NameRepr(cert.Subject) != expected {
-			return fmt.Errorf(
-				"Failed to validate the VOMS attribute chain: %s != %s",
-				NameRepr(cert.Issuer), expected,
-			)
+			return &VOVerificationError{VerificationError{
+				hint: fmt.Errorf(
+					"Failed to validate the VOMS attribute chain: %s != %s",
+					NameRepr(cert.Issuer), expected,
+				),
+			}}
 		}
 	}
 
