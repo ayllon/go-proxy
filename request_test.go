@@ -65,7 +65,7 @@ func TestNewProxy(t *testing.T) {
 	if nested == nil {
 		t.Fatal("New proxy is nil")
 	}
-	if nested.Key != nil {
+	if nested.PrivateKey != nil {
 		t.Fatal("The private key must not be set")
 	}
 

@@ -23,6 +23,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -43,7 +44,8 @@ const (
 type (
 	// VomsAttribute holds basic information about the Vo extensions of a proxy.
 	VomsAttribute struct {
-		Raw                 []byte
+		Raw []byte
+
 		Subject             pkix.Name
 		Issuer              pkix.Name
 		Vo                  string
@@ -58,13 +60,10 @@ type (
 
 	// X509Proxy holds an X509 proxy.
 	X509Proxy struct {
-		// Actual data
-		Certificate *x509.Certificate
-		Key         *rsa.PrivateKey
-		Chain       []*x509.Certificate
-		// Convenience fields
+		x509.Certificate
+		PrivateKey     *rsa.PrivateKey
+		Chain          []*x509.Certificate
 		ProxyType      Type
-		Subject        pkix.Name
 		Issuer         pkix.Name
 		Identity       pkix.Name
 		VomsAttributes []VomsAttribute
@@ -122,7 +121,7 @@ func (p *X509Proxy) Decode(raw []byte) (err error) {
 	for block, remaining := pem.Decode(raw); block != nil; block, remaining = pem.Decode(remaining) {
 		switch block.Type {
 		case "RSA PRIVATE KEY":
-			p.Key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+			p.PrivateKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 		case "CERTIFICATE":
 			var cert *x509.Certificate
 			if cert, err = x509.ParseCertificate(block.Bytes); err != nil {
@@ -149,9 +148,9 @@ func (p *X509Proxy) Decode(raw []byte) (err error) {
 
 // InitFromCertificates initializes the proxy from a x509 certificate
 func (p *X509Proxy) InitFromCertificates(chain []*x509.Certificate) (err error) {
-	p.Certificate, p.Chain = chain[0], chain[1:]
+	p.Certificate, p.Chain = *chain[0], chain[1:]
 
-	if err = p.parseExtensions(p.Certificate); err != nil {
+	if err = p.parseExtensions(&p.Certificate); err != nil {
 		return
 	}
 	for _, cert := range p.Chain {
@@ -159,14 +158,14 @@ func (p *X509Proxy) InitFromCertificates(chain []*x509.Certificate) (err error) 
 			return
 		}
 	}
-	p.ProxyType = getProxyType(p.Certificate)
+	p.ProxyType = getProxyType(&p.Certificate)
 	p.Subject = p.Certificate.Subject
 	p.Issuer = p.Certificate.Issuer
-	p.Identity, err = getIdentity(p)
+	p.Identity, err = p.getIdentity()
 
 	// For RFC proxies, need to remove the proxyCertInfoOid from the unhandled critical extensions,
 	// since we already have
-	removeProxyCertInfo(p.Certificate, proxyCertInfoOid)
+	removeProxyCertInfo(&p.Certificate, proxyCertInfoOid)
 	for _, c := range p.Chain {
 		removeProxyCertInfo(c, proxyCertInfoOid)
 	}
@@ -216,10 +215,10 @@ func (p *X509Proxy) Encode() []byte {
 	})
 	full = append(full, pemCert...)
 
-	if p.Key != nil {
+	if p.PrivateKey != nil {
 		pemKey := pem.EncodeToMemory(&pem.Block{
 			Type:  "RSA PRIVATE KEY",
-			Bytes: x509.MarshalPKCS1PrivateKey(p.Key),
+			Bytes: x509.MarshalPKCS1PrivateKey(p.PrivateKey),
 		})
 		full = append(full, pemKey...)
 	}
@@ -233,4 +232,56 @@ func (p *X509Proxy) Encode() []byte {
 	}
 
 	return full
+}
+
+// getProxyType returns the proxy type of cert
+func getProxyType(cert *x509.Certificate) Type {
+	for _, ext := range cert.Extensions {
+		if ext.Id.Equal(proxyCertInfoOid) {
+			return TypeRFC3820
+		} else if ext.Id.Equal(proxyCertInfoLegacyOid) {
+			return TypeDraft
+		}
+	}
+	if cert.Subject.CommonName == "proxy" {
+		return TypeLegacy
+	}
+	return TypeNoProxy
+}
+
+// isProxy checks if cert is a proxy certificate.
+func isProxy(cert *x509.Certificate) bool {
+	return getProxyType(cert) != TypeNoProxy
+}
+
+// getEndUserCertificate returns the end user original certificate.
+func (p *X509Proxy) getEndUserCertificate() (int, *x509.Certificate) {
+	if p.ProxyType == TypeNoProxy {
+		return 0, &p.Certificate
+	}
+	for i, cert := range p.Chain {
+		if !isProxy(cert) {
+			return i, cert
+		}
+	}
+	return 0, nil
+}
+
+// getIdentity returns the original user identity.
+func (p *X509Proxy) getIdentity() (pkix.Name, error) {
+	_, cert := p.getEndUserCertificate()
+	if cert == nil {
+		return pkix.Name{}, errors.New("Could not get the end user certificate")
+	}
+	return cert.Subject, nil
+}
+
+// getProxyCertInfo return the ProxyCertInfo extension
+func getProxyCertInfo(cert *x509.Certificate) *pkix.Extension {
+	for _, ext := range cert.Extensions {
+		if ext.Id.Equal(proxyCertInfoOid) {
+			return &ext
+		}
+	}
+	return nil
 }

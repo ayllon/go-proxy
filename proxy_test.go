@@ -34,10 +34,10 @@ func commonAsserts(proxy *X509Proxy, t *testing.T) {
 	if proxy == nil {
 		t.Fatal("Proxy must not be nil")
 	}
-	if proxy.Certificate == nil {
+	if proxy.Raw == nil {
 		t.Fatal("No certificate loaded")
 	}
-	if proxy.Key != nil {
+	if proxy.PrivateKey != nil {
 		t.Fatal("Unexpected private key")
 	}
 	if NameRepr(proxy.Identity) != "/DC=ch/DC=cern/OU=Organic Units/OU=Users/CN=saketag/CN=678984/CN=Alejandro Alvarez Ayllon" {

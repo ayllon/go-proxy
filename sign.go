@@ -98,7 +98,9 @@ func (p *X509Proxy) SignRequest(req *X509ProxyRequest, lifetime time.Duration) (
 		})
 	}
 
-	rawCert, err := x509.CreateCertificate(rand.Reader, &template, p.Certificate, req.Request.PublicKey, p.Key)
+	rawCert, err := x509.CreateCertificate(
+		rand.Reader, &template, &p.Certificate, req.Request.PublicKey, p.PrivateKey,
+	)
 	if err != nil {
 		return
 	}
@@ -109,16 +111,15 @@ func (p *X509Proxy) SignRequest(req *X509ProxyRequest, lifetime time.Duration) (
 	}
 
 	new = &X509Proxy{
-		Certificate:    cert,
-		Key:            nil,
+		Certificate:    *cert,
+		PrivateKey:     nil,
 		Chain:          make([]*x509.Certificate, 0, len(p.Chain)+1),
 		ProxyType:      p.ProxyType,
-		Subject:        cert.Subject,
 		Issuer:         p.Subject,
 		Identity:       p.Identity,
 		VomsAttributes: make([]VomsAttribute, len(p.VomsAttributes)),
 	}
-	new.Chain = append(new.Chain, p.Certificate)
+	new.Chain = append(new.Chain, &p.Certificate)
 	new.Chain = append(new.Chain, p.Chain...)
 	copy(new.VomsAttributes, p.VomsAttributes)
 	return

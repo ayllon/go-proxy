@@ -112,7 +112,7 @@ func (p *X509Proxy) Verify(options *VerifyOptions) error {
 	}
 
 	// From RFC3820, verify first the End Entity Certificate
-	index, eec := getEndUserCertificate(p)
+	index, eec := p.getEndUserCertificate()
 	if eec == nil {
 		return errors.New("Can not find the End Entity Certificate")
 	}
@@ -137,7 +137,7 @@ func verifyProxyChain(p *X509Proxy, eecIndex int, eec *x509.Certificate) error {
 	parent := eec
 
 	fullChain := make([]*x509.Certificate, 0, len(p.Chain)+1)
-	fullChain = append(fullChain, p.Certificate)
+	fullChain = append(fullChain, &p.Certificate)
 	fullChain = append(fullChain, p.Chain...)
 
 	for i := eecIndex; i >= 0; i-- {

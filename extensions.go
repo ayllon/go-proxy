@@ -290,8 +290,8 @@ func parseVomsAttribute(cert *x509.Certificate, ac *attributeCertificate) (vomsA
 // It looks if there is a known certificate in the chain for which the extensions were issued,
 // and process them.
 func (proxy *X509Proxy) getVomsAttribute(ac *attributeCertificate) (*VomsAttribute, error) {
-	if ac.AcInfo.Holder.isHolder(proxy.Certificate) {
-		return parseVomsAttribute(proxy.Certificate, ac)
+	if ac.AcInfo.Holder.isHolder(&proxy.Certificate) {
+		return parseVomsAttribute(&proxy.Certificate, ac)
 	}
 	for _, cert := range proxy.Chain {
 		if ac.AcInfo.Holder.isHolder(cert) {

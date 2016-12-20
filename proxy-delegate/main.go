@@ -69,7 +69,7 @@ func main() {
 	}
 
 	log.Print("Building full chain")
-	new.Key = r.Key
+	new.PrivateKey = r.Key
 
 	out, e := os.OpenFile(flag.Arg(0), os.O_CREATE|os.O_WRONLY, 0600)
 	if e != nil {
