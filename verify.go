@@ -68,7 +68,6 @@ func (e *VOVerificationError) Error() string {
 
 // Verify tries to verify if the proxy is trustworthy
 // If it is, it will return nil, an error otherwise.
-// TODO: CRL
 func (p *X509Proxy) Verify(options VerifyOptions) error {
 	if options.CurrentTime.IsZero() {
 		options.CurrentTime = time.Now()
@@ -97,6 +96,32 @@ func (p *X509Proxy) Verify(options VerifyOptions) error {
 		return &VerificationError{
 			hint:   errors.New("Failed to verify the proxy chain"),
 			nested: err,
+		}
+	}
+
+	// EEC seems good, check it is not on the CRL list
+	issuerNameHash := nameHash(&eec.Issuer)
+	if crl, ok := options.Roots.Crls[issuerNameHash]; ok {
+		if crl.HasExpired(options.CurrentTime) {
+			return &VerificationError{
+				hint: fmt.Errorf("CRL expired for '%s'", NameRepr(&eec.Issuer)),
+			}
+		} else if ca, ok := options.Roots.CaByHash[issuerNameHash]; !ok {
+			return &VerificationError{
+				hint: errors.New("Found the Certificate Revocation List, but not its corresponding CA"),
+			}
+		} else if err := ca.CheckCRLSignature(crl); err != nil {
+			return &VerificationError{
+				hint:   errors.New("Failed to verify the CRL signature"),
+				nested: err,
+			}
+		}
+		for _, revoked := range crl.TBSCertList.RevokedCertificates {
+			if revoked.SerialNumber.Cmp(eec.SerialNumber) == 0 {
+				return &VerificationError{
+					hint: errors.New("Certificate found on the revocation list"),
+				}
+			}
 		}
 	}
 
