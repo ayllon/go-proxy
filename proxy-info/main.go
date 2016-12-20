@@ -18,6 +18,7 @@ package main
 
 import (
 	"crypto/rsa"
+	"crypto/x509/pkix"
 	"flag"
 	"fmt"
 	"gitlab.cern.ch/flutter/go-proxy"
@@ -40,6 +41,8 @@ func getProxyPath() string {
 func main() {
 	capath := flag.String("capath", "/etc/grid-security/certificates", "Directory with the root CAs")
 	vomsdir := flag.String("vomsdir", "/etc/grid-security/vomsdir/", "VOMS dir")
+	debug := flag.Bool("debug", false, "Dump extra information")
+	crls := flag.Bool("crls", false, "Load CRLs")
 
 	flag.Parse()
 
@@ -52,9 +55,26 @@ func main() {
 		log.Fatal(e)
 	}
 
-	fmt.Printf("subject   : %s\n", proxy.NameRepr(p.Subject))
-	fmt.Printf("issuer    : %s\n", proxy.NameRepr(p.Issuer))
-	fmt.Printf("identity  : %s\n", proxy.NameRepr(p.Identity))
+	roots, err := proxy.LoadCAPath(*capath, *crls)
+	if err != nil {
+		fmt.Printf("Failed to load the root CA: %s", err)
+	} else if *debug {
+		fmt.Println("Loaded root CA")
+		for hash, ca := range roots.CaByHash {
+			fmt.Println(hash, " ", proxy.NameRepr(&ca.Subject))
+		}
+		fmt.Println("\nLoaded CRLs")
+		for hash, crl := range roots.Crls {
+			name := pkix.Name{}
+			name.FillFromRDNSequence(&crl.TBSCertList.Issuer)
+			fmt.Println(hash, " ", proxy.NameRepr(&name))
+		}
+		fmt.Println("")
+	}
+
+	fmt.Printf("subject   : %s\n", proxy.NameRepr(&p.Subject))
+	fmt.Printf("issuer    : %s\n", proxy.NameRepr(&p.Issuer))
+	fmt.Printf("identity  : %s\n", proxy.NameRepr(&p.Identity))
 	fmt.Printf("type      : %s\n", typeRepr[p.ProxyType])
 	fmt.Printf("strength  : %d bits\n", p.Certificate.PublicKey.(*rsa.PublicKey).N.BitLen())
 	fmt.Printf("timeleft  : %s\n", p.Certificate.NotAfter.Sub(time.Now()))
@@ -64,21 +84,21 @@ func main() {
 	}
 	for _, v := range p.VomsAttributes {
 		fmt.Printf("VO        : %s\n", v.Vo)
-		fmt.Printf("subject   : %s\n", proxy.NameRepr(v.Subject))
-		fmt.Printf("issuer    : %s\n", proxy.NameRepr(v.Issuer))
+		fmt.Printf("subject   : %s\n", proxy.NameRepr(&v.Subject))
+		fmt.Printf("issuer    : %s\n", proxy.NameRepr(&v.Issuer))
 		fmt.Printf("attribute : %s\n", v.Fqan)
 		fmt.Printf("timeleft  : %s\n", v.NotAfter.Sub(time.Now()))
 		fmt.Printf("uri       : %s\n", v.PolicyAuthority)
 	}
 
-	if roots, err := proxy.LoadCAPath(*capath); err != nil {
-		fmt.Printf("Failed to load the root CA: %s", err)
-	} else if err = p.Verify(proxy.VerifyOptions{
-		Roots:   roots,
-		VomsDir: *vomsdir,
-	}); err != nil {
-		fmt.Printf("Verification result: %s\n", err)
-	} else {
-		fmt.Printf("Verification OK\n")
+	if roots != nil {
+		if err = p.Verify(proxy.VerifyOptions{
+			Roots:   roots,
+			VomsDir: *vomsdir,
+		}); err != nil {
+			fmt.Printf("Verification result: %s\n", err)
+		} else {
+			fmt.Printf("Verification OK\n")
+		}
 	}
 }

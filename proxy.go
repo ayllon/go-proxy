@@ -103,7 +103,7 @@ func (p *X509Proxy) Expired() bool {
 // DelegationID returns the delegation id corresponding to the proxy.
 func (p *X509Proxy) DelegationID() string {
 	hash := sha1.New()
-	hash.Write([]byte(NameRepr(p.Subject)))
+	hash.Write([]byte(NameRepr(&p.Subject)))
 	for _, vo := range p.VomsAttributes {
 		hash.Write([]byte(vo.Fqan))
 	}

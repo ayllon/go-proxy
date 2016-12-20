@@ -176,7 +176,7 @@ func parseGeneralName(v asn1.RawValue) (string, error) {
 		}
 		var name pkix.Name
 		name.FillFromRDNSequence(&nameSeq)
-		return NameRepr(name), nil
+		return NameRepr(&name), nil
 	// Unknown
 	default:
 		return "", fmt.Errorf("Unsupported GeneralName tag: %d", v.Tag)

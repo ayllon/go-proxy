@@ -24,7 +24,6 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -34,7 +33,7 @@ import (
 type (
 	// VerifyOptions  contains parameters for X509Proxy.Verify
 	VerifyOptions struct {
-		Roots       *x509.CertPool
+		Roots       *CertPool
 		VomsDir     string
 		CurrentTime time.Time // if zero, the current time is used
 	}
@@ -67,25 +66,6 @@ func (e *VOVerificationError) Error() string {
 	return fmt.Sprint("VOMS verification error: ", e.hint)
 }
 
-// LoadCAPath loads the certificates stored under path into a cert-pool
-func LoadCAPath(capath string) (roots *x509.CertPool, err error) {
-	roots = x509.NewCertPool()
-
-	entries, err := ioutil.ReadDir(capath)
-	for _, file := range entries {
-		if !file.IsDir() {
-			data, ferr := ioutil.ReadFile(path.Join(capath, file.Name()))
-			if ferr == nil {
-				roots.AppendCertsFromPEM(data)
-			} else if err == nil {
-				err = ferr
-			}
-		}
-	}
-
-	return
-}
-
 // Verify tries to verify if the proxy is trustworthy
 // If it is, it will return nil, an error otherwise.
 // TODO: CRL
@@ -96,7 +76,7 @@ func (p *X509Proxy) Verify(options VerifyOptions) error {
 
 	x509Options := x509.VerifyOptions{
 		Intermediates: x509.NewCertPool(),
-		Roots:         options.Roots,
+		Roots:         options.Roots.CertPool,
 		CurrentTime:   options.CurrentTime,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
@@ -161,7 +141,7 @@ func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate, options VerifyOption
 		if err := parent.CheckSignature(c.SignatureAlgorithm, c.RawTBSCertificate, c.Signature); err != nil {
 			return &VerificationError{
 				hint: fmt.Errorf(
-					"Certificate '%s' not signed by '%s'", NameRepr(c.Subject), NameRepr(parent.Subject),
+					"Certificate '%s' not signed by '%s'", NameRepr(&c.Subject), NameRepr(&parent.Subject),
 				),
 				nested: err,
 			}
@@ -177,7 +157,7 @@ func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate, options VerifyOption
 			return &VerificationError{
 				hint: fmt.Errorf(
 					"Issuer does not match parent subject: %s != %s",
-					NameRepr(c.Issuer), NameRepr(parent.Subject),
+					NameRepr(&c.Issuer), NameRepr(&parent.Subject),
 				),
 			}
 		}
@@ -185,7 +165,7 @@ func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate, options VerifyOption
 		diff := nameDiff(&c.Issuer, &c.Subject)
 		if len(diff) != 1 || !diff[0].Type.Equal(cnNameOid) {
 			return &VerificationError{
-				hint: fmt.Errorf("Invalid subject name: %s (%q)", NameRepr(c.Subject), diff),
+				hint: fmt.Errorf("Invalid subject name: %s (%q)", NameRepr(&c.Subject), diff),
 			}
 		}
 
@@ -283,7 +263,7 @@ func verifyVOExtension(attr VomsAttribute, options VerifyOptions) error {
 
 	verifycationChains, err := attr.Chain[0].Verify(x509.VerifyOptions{
 		Intermediates: intermediates,
-		Roots:         options.Roots,
+		Roots:         options.Roots.CertPool,
 		CurrentTime:   options.CurrentTime,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	})
@@ -318,11 +298,11 @@ func verifyVOExtension(attr VomsAttribute, options VerifyOptions) error {
 		}
 
 		expected := scanner.Text()
-		if NameRepr(cert.Subject) != expected {
+		if NameRepr(&cert.Subject) != expected {
 			return &VOVerificationError{VerificationError{
 				hint: fmt.Errorf(
 					"Failed to validate the VOMS attribute chain: %s != %s",
-					NameRepr(cert.Issuer), expected,
+					NameRepr(&cert.Issuer), expected,
 				),
 			}}
 		}

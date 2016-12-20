@@ -30,7 +30,7 @@ var (
 )
 
 // NameRepr generates a string representation of the pkix.Name
-func NameRepr(name pkix.Name) string {
+func NameRepr(name *pkix.Name) string {
 	components := make([]string, 0, 10)
 	for _, name := range name.Names {
 		t := name.Type
