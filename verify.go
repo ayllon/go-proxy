@@ -34,8 +34,9 @@ import (
 type (
 	// VerifyOptions  contains parameters for X509Proxy.Verify
 	VerifyOptions struct {
-		Roots   *x509.CertPool
-		VomsDir string
+		Roots       *x509.CertPool
+		VomsDir     string
+		CurrentTime time.Time // if zero, the current time is used
 	}
 
 	// VerificationError is returned when there has been an error validating the main proxy chain
@@ -88,10 +89,15 @@ func LoadCAPath(capath string) (roots *x509.CertPool, err error) {
 // Verify tries to verify if the proxy is trustworthy
 // If it is, it will return nil, an error otherwise.
 // TODO: CRL
-func (p *X509Proxy) Verify(options *VerifyOptions) error {
+func (p *X509Proxy) Verify(options VerifyOptions) error {
+	if options.CurrentTime.IsZero() {
+		options.CurrentTime = time.Now()
+	}
+
 	x509Options := x509.VerifyOptions{
 		Intermediates: x509.NewCertPool(),
 		Roots:         options.Roots,
+		CurrentTime:   options.CurrentTime,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
@@ -115,7 +121,7 @@ func (p *X509Proxy) Verify(options *VerifyOptions) error {
 	}
 
 	// Once the EEC is verified, we validate the proxy chain
-	if err := p.verifyProxyChain(eec); err != nil {
+	if err := p.verifyProxyChain(eec, options); err != nil {
 		return err
 	}
 
@@ -125,7 +131,7 @@ func (p *X509Proxy) Verify(options *VerifyOptions) error {
 
 // Follow the proxy chain until the EEC
 // See https://tools.ietf.org/html/rfc3820#section-4
-func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate) error {
+func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate, options VerifyOptions) error {
 	// Build the full chain, including the proxy
 	fullChain := make([]*x509.Certificate, 0, len(p.Chain)+1)
 	fullChain = append(fullChain, &p.Certificate)
@@ -161,8 +167,7 @@ func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate) error {
 			}
 		}
 		// a.2 The certificate validity period includes the current time
-		now := time.Now()
-		if c.NotBefore.Sub(now) > 0 || c.NotAfter.Sub(now) < 0 {
+		if c.NotBefore.Sub(options.CurrentTime) > 0 || c.NotAfter.Sub(options.CurrentTime) < 0 {
 			return &VerificationError{
 				hint: x509.CertificateInvalidError{c, x509.Expired},
 			}
@@ -242,7 +247,7 @@ func nameDiff(a, b *pkix.Name) []pkix.AttributeTypeAndValue {
 }
 
 // verifyVoExtensions verifies the VO extensions present on the proxy
-func (p *X509Proxy) verifyVOExtensions(options *VerifyOptions) error {
+func (p *X509Proxy) verifyVOExtensions(options VerifyOptions) error {
 	for _, attr := range p.VomsAttributes {
 		if err := verifyVOExtension(attr, options); err != nil {
 			return err
@@ -252,7 +257,7 @@ func (p *X509Proxy) verifyVOExtensions(options *VerifyOptions) error {
 }
 
 // verifyVOExtension verify a voms attribute
-func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
+func verifyVOExtension(attr VomsAttribute, options VerifyOptions) error {
 	// Verify the signature
 	if len(attr.Chain) == 0 {
 		return &VOVerificationError{VerificationError{
@@ -279,6 +284,7 @@ func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
 	verifycationChains, err := attr.Chain[0].Verify(x509.VerifyOptions{
 		Intermediates: intermediates,
 		Roots:         options.Roots,
+		CurrentTime:   options.CurrentTime,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	})
 	if err != nil {
@@ -323,8 +329,7 @@ func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
 	}
 
 	// Last, but not least, the extension must be still alive
-	now := time.Now()
-	if attr.NotBefore.Sub(now) > 0 || attr.NotAfter.Sub(now) < 0 {
+	if attr.NotBefore.Sub(options.CurrentTime) > 0 || attr.NotAfter.Sub(options.CurrentTime) < 0 {
 		return &VOVerificationError{VerificationError{
 			hint: errors.New("VO Extension expired"),
 		}}

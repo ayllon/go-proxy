@@ -73,7 +73,7 @@ func main() {
 
 	if roots, err := proxy.LoadCAPath(*capath); err != nil {
 		fmt.Printf("Failed to load the root CA: %s", err)
-	} else if err = p.Verify(&proxy.VerifyOptions{
+	} else if err = p.Verify(proxy.VerifyOptions{
 		Roots:   roots,
 		VomsDir: *vomsdir,
 	}); err != nil {
