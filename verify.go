@@ -22,7 +22,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -35,15 +34,8 @@ import (
 type (
 	// VerifyOptions  contains parameters for X509Proxy.Verify
 	VerifyOptions struct {
-		Roots   *CertPool
+		Roots   *x509.CertPool
 		VomsDir string
-	}
-
-	// CertPool is a set of trusted certificates.
-	CertPool struct {
-		certPool       *x509.CertPool
-		bySubjectKeyId map[string]*x509.Certificate
-		byName         map[string]*x509.Certificate
 	}
 
 	// VerificationError is returned when there has been an error validating the main proxy chain
@@ -74,40 +66,9 @@ func (e *VOVerificationError) Error() string {
 	return fmt.Sprint("VOMS verification error: ", e.hint)
 }
 
-// AppendCertsFromPEM attempts to parse a series of PEM encoded certificates.
-// It appends any certificates found to s and reports whether any certificates
-// were successfully parsed.
-func (s *CertPool) AppendCertsFromPEM(pemCerts []byte) (ok bool) {
-	for len(pemCerts) > 0 {
-		var block *pem.Block
-		block, pemCerts = pem.Decode(pemCerts)
-		if block == nil {
-			break
-		}
-		if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-			continue
-		}
-
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			continue
-		}
-
-		s.certPool.AddCert(cert)
-		s.byName[NameRepr(cert.Subject)] = cert
-		s.bySubjectKeyId[string(cert.SubjectKeyId)] = cert
-		ok = true
-	}
-	return
-}
-
 // LoadCAPath loads the certificates stored under path into a cert-pool
-func LoadCAPath(capath string) (roots *CertPool, err error) {
-	roots = &CertPool{
-		certPool:       x509.NewCertPool(),
-		bySubjectKeyId: make(map[string]*x509.Certificate),
-		byName:         make(map[string]*x509.Certificate),
-	}
+func LoadCAPath(capath string) (roots *x509.CertPool, err error) {
+	roots = x509.NewCertPool()
 
 	entries, err := ioutil.ReadDir(capath)
 	for _, file := range entries {
@@ -130,7 +91,7 @@ func LoadCAPath(capath string) (roots *CertPool, err error) {
 func (p *X509Proxy) Verify(options *VerifyOptions) error {
 	x509Options := x509.VerifyOptions{
 		Intermediates: x509.NewCertPool(),
-		Roots:         options.Roots.certPool,
+		Roots:         options.Roots,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
@@ -317,7 +278,7 @@ func verifyVOExtension(attr VomsAttribute, options *VerifyOptions) error {
 
 	verifycationChains, err := attr.Chain[0].Verify(x509.VerifyOptions{
 		Intermediates: intermediates,
-		Roots:         options.Roots.certPool,
+		Roots:         options.Roots,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	})
 	if err != nil {
