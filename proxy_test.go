@@ -19,7 +19,6 @@ package proxy
 import (
 	"bytes"
 	"io/ioutil"
-	"path"
 	"testing"
 )
 
@@ -60,90 +59,54 @@ func commonAsserts(proxy *X509Proxy, t *testing.T) {
 	}
 }
 
-// loadChain reads into a buffer a list of pem files under test-samples
-func loadChain(paths ...string) ([]byte, error) {
-	var full []byte
-
-	for _, file := range paths {
-		var content []byte
-		var err error
-
-		fullPath := path.Join("test-samples", file)
-		if content, err = ioutil.ReadFile(fullPath); err != nil {
-			return nil, err
-		}
-		full = append(full, content...)
-		full = append(full, '\n')
+func loadProxy(path string, t *testing.T) *X509Proxy {
+	content, e := ioutil.ReadFile(path)
+	if e != nil {
+		t.Fatal(e)
 	}
-
-	return full, nil
+	p := &X509Proxy{}
+	if e = p.Decode(content); e != nil {
+		t.Fatal(e)
+	}
+	return p
 }
 
 func TestLegacyProxy(t *testing.T) {
-	full, err := loadChain("LegacyProxy.pem", "BaseCert.pem")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var p X509Proxy
-	if e := p.Decode(full); e != nil {
-		t.Fatal(e)
-	}
-
-	commonAsserts(&p, t)
+	p := loadProxy("test-samples/LegacyProxy.pem", t)
+	commonAsserts(p, t)
 	if p.ProxyType != TypeLegacy {
 		t.Fatal("Expecting Legacy proxy")
 	}
 }
 
 func TestDraftProxy(t *testing.T) {
-	full, err := loadChain("DraftProxy.pem", "BaseCert.pem")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var p X509Proxy
-	if e := p.Decode(full); e != nil {
-		t.Fatal(e)
-	}
-
-	commonAsserts(&p, t)
+	p := loadProxy("test-samples/DraftProxy.pem", t)
+	commonAsserts(p, t)
 	if p.ProxyType != TypeDraft {
 		t.Fatal("Expecting Draft proxy")
 	}
 }
 
 func TestRfcProxy(t *testing.T) {
-	full, err := loadChain("RfcProxy.pem", "BaseCert.pem")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var p X509Proxy
-	if e := p.Decode(full); e != nil {
-		t.Fatal(e)
-	}
-
-	commonAsserts(&p, t)
+	p := loadProxy("test-samples/RfcProxy.pem", t)
+	commonAsserts(p, t)
 	if p.ProxyType != TypeRFC3820 {
 		t.Fatal("Expecting RFC proxy")
 	}
 }
 
 func TestSerialize(t *testing.T) {
-	original, err := loadChain("RfcProxy.pem", "BaseCert.pem")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var p X509Proxy
-	if e := p.Decode(original); e != nil {
+	original, e := ioutil.ReadFile("test-samples/RfcProxy.pem")
+	if e != nil {
 		t.Fatal(e)
 	}
-
+	p := &X509Proxy{}
+	if e = p.Decode(original); e != nil {
+		t.Fatal(e)
+	}
 	// loadChain appends an extra \n!
 	pem := p.Encode()
-	if !bytes.Equal(original[:len(original)-1], pem) {
+	if !bytes.Equal(original[:len(original)], pem) {
 		t.Fatal("Serialized version does not match the original one")
 	}
 }
