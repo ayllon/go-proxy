@@ -334,7 +334,11 @@ func verifyVOExtension(attr VomsAttribute, options VerifyOptions) error {
 	}
 
 	// Last, but not least, the extension must be still alive
-	if attr.NotBefore.Sub(options.CurrentTime) > 0 || attr.NotAfter.Sub(options.CurrentTime) < 0 {
+	if attr.NotBefore.Sub(options.CurrentTime) > 0 {
+		return &VOVerificationError{VerificationError{
+			hint: fmt.Errorf("VO Extension still not valid"),
+		}}
+	} else if attr.NotAfter.Sub(options.CurrentTime) < 0 {
 		return &VOVerificationError{VerificationError{
 			hint: errors.New("VO Extension expired"),
 		}}
