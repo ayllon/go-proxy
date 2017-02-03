@@ -20,9 +20,9 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"flag"
+	"io/ioutil"
 	"testing"
 	"time"
-	"io/ioutil"
 )
 
 var vomsPath = flag.String("vomspath", "test-samples/vomsdir", "VOMS directory")
@@ -131,5 +131,18 @@ func TestVerifyNested(t *testing.T) {
 	p := loadProxy("test-samples/NestedProxy.pem", t)
 	if e := p.Verify(options); e != nil {
 		t.Error(e)
+	}
+}
+
+// Verify a forged proxy. The issuer is valid, but the subject has been tampered
+func TestVerifyForged(t *testing.T) {
+	options := iniVerifyOptions(t)
+	options.CurrentTime = time.Date(2017, 02, 03, 11, 00, 00, 0, gmt)
+
+	p := loadProxy("test-samples/BadForgedProxy.pem", t)
+	if e := p.Verify(options); e == nil {
+		t.Error("Must have failed")
+	} else {
+		t.Log(e)
 	}
 }
