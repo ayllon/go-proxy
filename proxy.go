@@ -120,6 +120,15 @@ func (p *X509Proxy) Decode(raw []byte) (err error) {
 
 	for block, remaining := pem.Decode(raw); block != nil; block, remaining = pem.Decode(remaining) {
 		switch block.Type {
+		case "PRIVATE KEY":
+			var priv interface{}
+			var ok bool
+			if priv, err = x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
+				return
+			}
+			if p.PrivateKey, ok = priv.(*rsa.PrivateKey); !ok {
+				return x509.ErrUnsupportedAlgorithm
+			}
 		case "RSA PRIVATE KEY":
 			p.PrivateKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 		case "CERTIFICATE":

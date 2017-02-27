@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"io/ioutil"
 	"testing"
+	"crypto/rsa"
 )
 
 func TestParseMalformed(t *testing.T) {
@@ -90,6 +91,19 @@ func TestDraftProxy(t *testing.T) {
 func TestRfcProxy(t *testing.T) {
 	p := loadProxy("test-samples/RfcProxy.pem", t)
 	commonAsserts(p, t)
+	if p.ProxyType != TypeRFC3820 {
+		t.Fatal("Expecting RFC proxy")
+	}
+}
+
+func TestFtsProxy(t *testing.T) {
+	p := loadProxy("test-samples/Fts.pem", t)
+	if p.PrivateKey == nil {
+		t.Error("Expected private key")
+	}
+	if p.Certificate.PublicKey.(*rsa.PublicKey).N.Cmp(p.PrivateKey.N) != 0 {
+		t.Error("Private key does not match public key")
+	}
 	if p.ProxyType != TypeRFC3820 {
 		t.Fatal("Expecting RFC proxy")
 	}
