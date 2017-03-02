@@ -77,7 +77,7 @@ func main() {
 	fmt.Printf("identity  : %s\n", proxy.NameRepr(&p.Identity))
 	fmt.Printf("type      : %s\n", typeRepr[p.ProxyType])
 	fmt.Printf("strength  : %d bits\n", p.Certificate.PublicKey.(*rsa.PublicKey).N.BitLen())
-	fmt.Printf("timeleft  : %s\n", p.Certificate.NotAfter.Sub(time.Now()))
+	fmt.Printf("timeleft  : %s\n", p.Lifetime())
 	fmt.Printf("key usage : %s\n", proxy.KeyUsageRepr(p.Certificate.KeyUsage))
 	if len(p.VomsAttributes) > 0 {
 		fmt.Print("=== VO dteam extension information ===\n")
@@ -87,7 +87,7 @@ func main() {
 		fmt.Printf("subject   : %s\n", proxy.NameRepr(&v.Subject))
 		fmt.Printf("issuer    : %s\n", proxy.NameRepr(&v.Issuer))
 		fmt.Printf("attribute : %s\n", v.Fqan)
-		fmt.Printf("timeleft  : %s\n", v.NotAfter.Sub(time.Now()))
+		fmt.Printf("timeleft  : %s\n", v.Lifetime())
 		fmt.Printf("uri       : %s\n", v.PolicyAuthority)
 	}
 

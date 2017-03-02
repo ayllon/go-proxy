@@ -81,10 +81,10 @@ func TestNewProxy(t *testing.T) {
 		t.Fatal("The issuer of the new proxy is not the original proxy")
 	}
 
-	if nested.Certificate.NotAfter.Sub(p.Certificate.NotAfter) > 0 {
+	if nested.Certificate.NotAfter.After(p.Certificate.NotAfter) {
 		t.Fatal("The new proxy can not expire after the signing proxy")
 	}
-	if nested.Certificate.NotBefore.Sub(p.Certificate.NotBefore) < 0 {
+	if nested.Certificate.NotBefore.Before(p.Certificate.NotBefore) {
 		t.Fatal("The new proxy can not start before the signing proxy")
 	}
 	if reflect.DeepEqual(nested.Subject, p.Subject) {

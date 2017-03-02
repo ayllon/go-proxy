@@ -76,7 +76,7 @@ func (p *X509Proxy) SignRequest(req *X509ProxyRequest, lifetime time.Duration) (
 	template.MaxPathLenZero = p.Certificate.MaxPathLenZero
 	template.SignatureAlgorithm = req.Request.SignatureAlgorithm
 
-	if p.Certificate.NotAfter.Sub(template.NotAfter) < 0 {
+	if p.Certificate.NotAfter.Before(template.NotAfter) {
 		template.NotAfter = p.Certificate.NotAfter
 	}
 

@@ -172,7 +172,7 @@ func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate, options VerifyOption
 			}
 		}
 		// a.2 The certificate validity period includes the current time
-		if c.NotBefore.Sub(options.CurrentTime) > 0 || c.NotAfter.Sub(options.CurrentTime) < 0 {
+		if options.CurrentTime.Before(c.NotBefore) || options.CurrentTime.After(c.NotAfter) {
 			return &VerificationError{
 				hint: x509.CertificateInvalidError{c, x509.Expired},
 			}
@@ -334,11 +334,11 @@ func verifyVOExtension(attr VomsAttribute, options VerifyOptions) error {
 	}
 
 	// Last, but not least, the extension must be still alive
-	if attr.NotBefore.Sub(options.CurrentTime) > 0 {
+	if options.CurrentTime.Before(attr.NotBefore) {
 		return &VOVerificationError{VerificationError{
 			hint: fmt.Errorf("VO Extension still not valid"),
 		}}
-	} else if attr.NotAfter.Sub(options.CurrentTime) < 0 {
+	} else if options.CurrentTime.After(attr.NotAfter) {
 		return &VOVerificationError{VerificationError{
 			hint: errors.New("VO Extension expired"),
 		}}
