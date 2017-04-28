@@ -24,7 +24,6 @@ import (
 	"gitlab.cern.ch/flutter/go-proxy"
 	"log"
 	"os"
-	"time"
 )
 
 var proxyPath = flag.String("file", "", "Proxy location")
