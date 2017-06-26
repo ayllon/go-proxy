@@ -214,6 +214,32 @@ func (p *X509Proxy) DecodeFromFile(path string) (err error) {
 	return p.Decode(pem)
 }
 
+// DecodeFromFiles loads a X509 proxy from two files with the cert and the key.
+// Returns a pointer to a X509Proxy holding basic information about the proxy, as valid timestamps,
+// VO extensions, etc.
+func (p *X509Proxy) DecodeFromFiles(cert string, key string) (err error) {
+	if cert == key {
+		return p.DecodeFromFile(cert)
+	}
+
+	if _, err = os.Stat(cert); err != nil {
+		return
+	}
+	if _, err = os.Stat(key); err != nil {
+		return
+	}
+
+	var certPem, keyPem []byte
+	if certPem, err = ioutil.ReadFile(cert); err != nil {
+		return
+	}
+	if keyPem, err = ioutil.ReadFile(key); err != nil {
+		return
+	}
+
+	return p.Decode(append(certPem, keyPem...))
+}
+
 // Encode returns the PEM version of the proxy.
 func (p *X509Proxy) Encode() []byte {
 	var full []byte

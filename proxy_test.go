@@ -18,9 +18,10 @@ package proxy
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"io/ioutil"
 	"testing"
-	"crypto/rsa"
+	"time"
 )
 
 func TestParseMalformed(t *testing.T) {
@@ -122,5 +123,28 @@ func TestSerialize(t *testing.T) {
 	pem := p.Encode()
 	if !bytes.Equal(original[:len(original)], pem) {
 		t.Fatal("Serialized version does not match the original one")
+	}
+}
+
+func TestLoadCertAndKey(t *testing.T) {
+	notBefore, _ := time.Parse(time.RFC1123, "Mon, 26 Jun 2017 08:48:38 UTC")
+	notAfter, _ := time.Parse(time.RFC1123, "Mon, 15 Apr 2020 08:48:38 UTC")
+
+	p := &X509Proxy{}
+	e := p.DecodeFromFiles("test-samples/Cert.pem", "test-samples/Key.pem")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if NameRepr(&p.Subject) != "/C=CH/ST=Geneva/L=Geneva/O=CERN/OU=IT/CN=ProxyTest/emailAddress=fts-devel@cern.ch" {
+		t.Error("Unexpected subject: ", NameRepr(&p.Subject))
+	}
+	if p.NotBefore != notBefore {
+		t.Error("Unexpected not before: ", p.NotBefore)
+	}
+	if p.NotAfter != notAfter {
+		t.Error("Unexpected not after: ", p.NotAfter)
+	}
+	if p.PrivateKey.N.Cmp(p.PublicKey.(*rsa.PublicKey).N) != 0 {
+		t.Error("Private and public keys do not match")
 	}
 }
