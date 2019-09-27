@@ -20,7 +20,7 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"gitlab.cern.ch/flutter/go-proxy"
+	"github.com/ayllon/go-proxy"
 	"log"
 	"os"
 	"time"

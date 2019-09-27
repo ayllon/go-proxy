@@ -172,11 +172,25 @@ func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate, options VerifyOption
 			}
 		}
 		// a.2 The certificate validity period includes the current time
-		if options.CurrentTime.Before(c.NotBefore) || options.CurrentTime.After(c.NotAfter) {
+		if options.CurrentTime.Before(c.NotBefore) {
 			return &VerificationError{
-				hint: x509.CertificateInvalidError{Cert: c, Reason: x509.Expired},
+				hint: x509.CertificateInvalidError{
+					Cert:c, Reason: x509.Expired, Detail: fmt.Sprintf(
+						"Certificate '%s' not yet valid", NameRepr(&c.Subject),
+					),
+				},
 			}
 		}
+		if options.CurrentTime.After(c.NotAfter) {
+			return &VerificationError{
+				hint: x509.CertificateInvalidError{
+					Cert:c, Reason: x509.Expired, Detail: fmt.Sprintf(
+						"Certificate '%s' expired", NameRepr(&c.Subject),
+					),
+				},
+			}
+		}
+
 		// a.3 The certificate issuer name is the parent issuer name
 		if !reflect.DeepEqual(c.Issuer, parent.Subject) {
 			return &VerificationError{

@@ -21,7 +21,7 @@ import (
 	"crypto/x509/pkix"
 	"flag"
 	"fmt"
-	"gitlab.cern.ch/flutter/go-proxy"
+	"github.com/ayllon/go-proxy"
 	"log"
 	"os"
 )

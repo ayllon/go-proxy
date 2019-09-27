@@ -24,7 +24,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/Sirupsen/logrus"
-	"gitlab.cern.ch/flutter/go-proxy"
+	"github.com/ayllon/go-proxy"
 	"math/big"
 	mrand "math/rand"
 	"net"
