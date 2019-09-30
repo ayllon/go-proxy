@@ -174,7 +174,7 @@ func (p *X509Proxy) verifyProxyChain(eec *x509.Certificate, options VerifyOption
 		// a.2 The certificate validity period includes the current time
 		if options.CurrentTime.Before(c.NotBefore) || options.CurrentTime.After(c.NotAfter) {
 			return &VerificationError{
-				hint: x509.CertificateInvalidError{c, x509.Expired},
+				hint: x509.CertificateInvalidError{Cert: c, Reason: x509.Expired},
 			}
 		}
 		// a.3 The certificate issuer name is the parent issuer name
