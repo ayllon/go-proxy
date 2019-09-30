@@ -10,7 +10,6 @@ go-proxy is an utility library written in Go to handle X509 proxies, with and wi
 ## What doesn't it do
 * It can't acquire VOMS extensions from a VOMS server.
 * It can't create a brand new proxy from a user certificate and key. API limitation, mostly.
-* It doesn't include (yet) any validation logic (chain, root CA, nor VOMS extensions)
 
  [![GoDoc](https://godoc.org/github.com/ayllon/go-proxy?status.svg)](https://godoc.org/github.com/ayllon/go-proxy)
  
