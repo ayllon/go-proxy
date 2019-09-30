@@ -12,7 +12,7 @@ go-proxy is an utility library written in Go to handle X509 proxies, with and wi
 * It can't create a brand new proxy from a user certificate and key. API limitation, mostly.
 * It doesn't include (yet) any validation logic (chain, root CA, nor VOMS extensions)
 
- [![GoDoc](https://godoc.org/gitlab.cern.ch/fts/go-proxy?status.svg)](https://godoc.org/gitlab.cern.ch/flutter/go-proxy)
+ [![GoDoc](https://godoc.org/github.com/ayllon/go-proxy?status.svg)](https://godoc.org/github.com/ayllon/go-proxy)
  
  
 ## Examples
@@ -23,7 +23,7 @@ package main
 
 import (
 	"flag"
-	"gitlab.cern.ch/fts/go-proxy"
+	"github.com/ayllon/go-proxy"
 	"log"
 )
 
