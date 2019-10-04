@@ -97,3 +97,20 @@ func LoadCAPath(capath string, loadCrls bool) (roots *CertPool, err error) {
 
 	return
 }
+
+// LoadCAFile loads the certificates stored in cafile into a cert-pool
+func LoadCAFile(cafile string, loadCrls bool) (*CertPool, error) {
+	data, err := ioutil.ReadFile(cafile)
+	if err != nil {
+		return nil, err
+	}
+	roots := &CertPool{
+		CertPool: x509.NewCertPool(),
+		Crls:     make(map[string]*pkix.CertificateList),
+		CaByHash: make(map[string]*x509.Certificate),
+	}
+	if err := roots.AppendFromPEM(data, loadCrls); err != nil {
+		return nil, err
+	}
+	return roots, nil
+}
